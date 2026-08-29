@@ -153,6 +153,26 @@ const zipPath = path.join(shotDir, "batch.zip");
 await zipDownload.saveAs(zipPath);
 check(fs.statSync(zipPath).size > 10000, `batch ZIP downloaded (${fs.statSync(zipPath).size} bytes)`);
 
+// per-row verification after generation
+await page.waitForFunction(
+  () => document.querySelector("#batch-progress-label")?.textContent.includes("Done"),
+  null, { timeout: 30000 }
+);
+check(
+  (await page.locator("#batch-progress-label").textContent()).includes("all verified scannable"),
+  "batch completion reports verification"
+);
+const firstRowBadge = await page.locator("#batch-table tbody tr >> nth=0").locator(".row-badge").textContent();
+check(firstRowBadge.includes("verified"), `rows show per-code verification (badge: ${firstRowBadge.trim()})`);
+
+// a design change must invalidate stale verified claims
+await page.click('#corner-square-style .seg-btn[data-value="square"]');
+await page.waitForTimeout(200);
+const invalidatedBadge = await page.locator("#batch-table tbody tr >> nth=0").locator(".row-badge").textContent();
+check(invalidatedBadge.includes("ready"), "design change invalidates verified badges");
+await page.click('#corner-square-style .seg-btn[data-value="extra-rounded"]');
+await page.waitForTimeout(300);
+
 await page.screenshot({ path: path.join(shotDir, "ui-batch.png"), fullPage: true });
 
 // row → Single-tab preview bridge

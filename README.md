@@ -9,7 +9,7 @@ A QR code generator with single and batch (CSV) generation, styled QR designs, a
 - **Single QR codes** — enter a URL or text, style it, download as SVG or PNG.
 - **Batch from CSV** — upload a CSV (`qrName,hostname,scanLimit,url`), preview the rows, and download every QR code in one ZIP (PNG, SVG, or both). A template CSV is downloadable in-app.
 - **Design settings** — module shapes (square, dots, rounded, classy…), solid or gradient colours, transparent background, invert, corner frame/center styles, error correction level (L/M/Q/H), central logo upload with size control, and export resolution up to 4096px.
-- **Live scannability check** — every preview is decoded with ZXing in the browser; a badge tells you whether the current design actually scans before you print it.
+- **Live scannability check** — every preview is decoded with ZXing in the browser; a badge tells you whether the current design actually scans before you print it. Batch runs verify every generated code the same way, marking each row verified or failed — and a later design change resets those claims rather than letting them go stale.
 - **Guideline enforcement** — quiet zone of ≥4 modules per ISO/IEC 18004 (computed from the symbol version, in both the app and the CLI), a caution on inverted light-on-dark codes and transparent backgrounds, a density warning for long content, and a logo cap at 40% so ECC H can still recover the obscured modules.
 
 ## Run the app

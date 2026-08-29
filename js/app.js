@@ -89,13 +89,19 @@
   const previewEl = $("qr-preview");
   let scanCheckTimer = null;
 
-  function refreshPreview() {
+  function refreshPreview(designChanged = true) {
     // Recreate the instance instead of update(): update() deep-merges
     // options, so removed keys (e.g. a disabled gradient) would linger.
     previewEl.textContent = "";
     new QRCodeStyling(buildOptions({ size: 300 })).append(previewEl);
     clearTimeout(scanCheckTimer);
     scanCheckTimer = setTimeout(runScanCheck, 500);
+    // batch codes share the design, so a design change makes any per-row
+    // "verified" claim stale — content-only changes (designChanged=false) don't
+    if (designChanged && state.batchRows.some((r) => r.verified !== undefined)) {
+      state.batchRows.forEach((r) => { delete r.verified; });
+      if (!$("batch-preview").classList.contains("hidden")) renderBatchPreview();
+    }
   }
 
   // ---------- Scannability check (best effort, via zxing-wasm) ----------
@@ -108,6 +114,7 @@
     ok: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m8 12.5 2.5 2.5L16 9.5"/></svg>',
     bad: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 9 6 6M15 9l-6 6"/></svg>',
     checking: '<svg class="spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.2-8.56"/></svg>',
+    off: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 8h.01M12 11v5"/></svg>',
   };
 
   function setBadge(stateName, title, advice) {
@@ -150,7 +157,9 @@
       );
     } catch {
       zxingFailed = true;
-      scanBadge.hidden = true;
+      // A trust product must say when verification is off, not just vanish it
+      setBadge("off", "Verification unavailable",
+        "The ZXing decoder could not load (offline?). Codes still generate, but are not machine-verified.");
     }
     return zxingReader;
   }
@@ -261,7 +270,7 @@
     contentPristine = false;
     state.content = e.target.value.trim();
     syncContentState();
-    refreshPreview();
+    refreshPreview(false);
   });
 
   $("qr-name").addEventListener("input", (e) => {
@@ -362,7 +371,7 @@
     const file = e.target.files[0];
     if (!file) return;
     if (file.size > 2 * 1024 * 1024) {
-      alert("Logo must be 2MB or smaller.");
+      showToast("Logo must be 2MB or smaller.", "error");
       e.target.value = "";
       return;
     }
@@ -431,7 +440,7 @@
       await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
       showToast("PNG copied to clipboard");
     } catch {
-      showToast("Copy failed — try downloading instead");
+      showToast("Copy failed — try downloading instead", "error");
     }
   });
 
@@ -483,13 +492,13 @@
 
   // ---------- Toast ----------
   let toastTimer = null;
-  function showToast(message) {
+  function showToast(message, variant = "ok") {
     const toast = $("toast");
-    toast.innerHTML = `${BADGE_ICONS.ok}<span></span>`;
+    toast.innerHTML = `${BADGE_ICONS[variant === "error" ? "bad" : "ok"]}<span></span>`;
     toast.querySelector("span").textContent = message;
-    toast.classList.add("show");
+    toast.className = variant === "error" ? "toast toast-error show" : "toast show";
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => toast.classList.remove("show"), 2600);
+    toastTimer = setTimeout(() => toast.classList.remove("show"), variant === "error" ? 4000 : 2600);
   }
 
 
@@ -543,7 +552,7 @@
       transformHeader: (h) => h.trim(),
       complete: ({ data, meta }) => {
         if (!meta.fields || !meta.fields.includes("url")) {
-          alert('CSV must contain a "url" column. Download the template for the expected format.');
+          showToast('CSV needs a "url" column — download the template for the format.', "error");
           return;
         }
         state.batchRows = data.map((row, i) => {
@@ -559,7 +568,7 @@
         batchFileName = file.name;
         renderBatchPreview();
       },
-      error: (err) => alert(`Could not parse CSV: ${err.message}`),
+      error: (err) => showToast(`Could not parse CSV: ${err.message}`, "error"),
     });
   }
 
@@ -569,7 +578,17 @@
   const ROW_ICONS = {
     ok: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="m5 13 4 4L19 7"/></svg>',
     bad: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>',
+    dot: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><circle cx="12" cy="12" r="5"/></svg>',
   };
+
+  // Per-row status: pending rows are neutral; after generation each row is
+  // marked verified (decoded back to its URL) or failed.
+  function rowBadgeState(row) {
+    if (!row.valid) return { cls: "bad", icon: ROW_ICONS.bad, text: "skipped" };
+    if (row.verified === true) return { cls: "ok", icon: ROW_ICONS.ok, text: "verified" };
+    if (row.verified === false) return { cls: "bad", icon: ROW_ICONS.bad, text: "failed scan" };
+    return { cls: "neutral", icon: ROW_ICONS.dot, text: "ready" };
+  }
 
   function renderBatchPreview() {
     const rows = state.batchRows;
@@ -627,9 +646,10 @@
       tr.appendChild(tdUrl);
       const tdBadge = document.createElement("td");
       const badge = document.createElement("span");
-      badge.className = `row-badge ${row.valid ? "ok" : "bad"}`;
-      badge.innerHTML = `${row.valid ? ROW_ICONS.ok : ROW_ICONS.bad}<span></span>`;
-      badge.querySelector("span").textContent = row.valid ? "ready" : "skipped";
+      const badgeState = rowBadgeState(row);
+      badge.className = `row-badge ${badgeState.cls}`;
+      badge.innerHTML = `${badgeState.icon}<span></span>`;
+      badge.querySelector("span").textContent = badgeState.text;
       tdBadge.appendChild(badge);
       tr.appendChild(tdBadge);
       tbody.appendChild(tr);
@@ -647,7 +667,7 @@
     contentPristine = false;
     setTab("single");
     syncContentState();
-    refreshPreview();
+    refreshPreview(false);
     showToast(`Previewing “${row.name}”`);
   }
 
@@ -688,6 +708,9 @@
       const wantPng = state.batchFormat !== "svg";
       const wantSvg = state.batchFormat !== "png";
       const usedNames = new Map();
+      // The trust promise covers batch too: decode every generated code
+      const reader = await loadZxing(); // null when the decoder is unavailable
+      let failed = 0;
 
       for (let i = 0; i < rows.length; i++) {
         if (batchAbort) break;
@@ -702,7 +725,19 @@
 
         const qr = new QRCodeStyling(buildOptions({ data: row.url }));
         if (wantSvg) zip.file(`${base}.svg`, await qr.getRawData("svg"));
-        if (wantPng) zip.file(`${base}.png`, await qr.getRawData("png"));
+        // PNG is always rendered: it is also the verification medium
+        const pngBlob = await qr.getRawData("png");
+        if (wantPng) zip.file(`${base}.png`, pngBlob);
+
+        if (reader) {
+          try {
+            const results = await reader.readBarcodes(pngBlob, { formats: ["QRCode"], tryHarder: true });
+            row.verified = Boolean(results.length && results[0].isValid && results[0].text === row.url);
+          } catch {
+            row.verified = undefined;
+          }
+          if (row.verified === false) failed++;
+        }
       }
 
       if (batchAbort) {
@@ -712,8 +747,16 @@
         label.textContent = "Packaging ZIP…";
         const blob = await zip.generateAsync({ type: "blob" });
         triggerDownload(blob, "qr-codes.zip");
-        label.textContent = `Done — ${rows.length} QR code${rows.length === 1 ? "" : "s"} downloaded.`;
-        showToast(`qr-codes.zip — ${rows.length} code${rows.length === 1 ? "" : "s"} downloaded`);
+        renderBatchPreview(); // surface per-row verification results
+        const codes = `${rows.length} QR code${rows.length === 1 ? "" : "s"}`;
+        const note = !reader
+          ? "verification unavailable"
+          : failed
+            ? `${failed} failed verification`
+            : "all verified scannable";
+        label.textContent = `Done — ${codes} downloaded, ${note}.`;
+        if (failed) showToast(`${failed} code${failed === 1 ? "" : "s"} failed scan verification — check the table`, "error");
+        else showToast(`qr-codes.zip — ${codes} downloaded`);
       }
     } catch (err) {
       label.textContent = `Failed: ${err.message}`;

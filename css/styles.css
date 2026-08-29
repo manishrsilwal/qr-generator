@@ -641,6 +641,7 @@ th[aria-sort="descending"] .sort-arrow { transform: rotate(180deg); }
 .row-badge svg { width: 11px; height: 11px; }
 .row-badge.ok { color: var(--ok); background: var(--ok-bg); }
 .row-badge.bad { color: var(--err); background: var(--err-bg); }
+.row-badge.neutral { color: var(--text-muted); background: var(--inset); }
 
 /* ---------- Progress ---------- */
 .progress-row { display: flex; gap: 0.6rem; align-items: stretch; }
@@ -804,6 +805,7 @@ th[aria-sort="descending"] .sort-arrow { transform: rotate(180deg); }
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 .toast svg { width: 15px; height: 15px; }
+.toast-error { background: var(--err); color: #fff; }
 
 @media (prefers-reduced-motion: reduce) {
   * { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
