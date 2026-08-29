@@ -101,10 +101,29 @@ check(cautionSeen, "inverted code shows light-on-dark guideline caution");
 await page.click("#btn-invert");
 await page.waitForTimeout(600);
 
-// empty content must disable downloads
+// empty content must disable downloads and copy
 await page.fill("#qr-content", "");
 check(await page.locator("#btn-download-png").isDisabled(), "downloads disabled with empty content");
+check(await page.locator("#btn-copy-png").isDisabled(), "copy disabled with empty content");
 await page.fill("#qr-content", "https://setu.ndrrma.gov.np/");
+await page.waitForTimeout(600);
+
+// arrow keys move selection within radiogroups (WAI-ARIA pattern)
+await page.focus('#size-options .seg-btn[data-size="1024"]');
+await page.keyboard.press("ArrowRight");
+check(
+  await page.locator('#size-options .seg-btn[data-size="2048"]').evaluate((el) => el.classList.contains("active")),
+  "arrow keys move radiogroup selection"
+);
+await page.click('#size-options .seg-btn[data-size="1024"]');
+
+// reset restores default design after changes
+await page.click('#dot-style-grid .style-option[data-value="square"]');
+await page.click("#btn-reset-design");
+check(
+  await page.locator('#dot-style-grid .style-option[data-value="dots"]').evaluate((el) => el.classList.contains("active")),
+  "reset restores default design"
+);
 await page.waitForTimeout(600);
 
 await page.screenshot({ path: path.join(shotDir, "ui-single.png"), fullPage: true });
@@ -135,6 +154,12 @@ await zipDownload.saveAs(zipPath);
 check(fs.statSync(zipPath).size > 10000, `batch ZIP downloaded (${fs.statSync(zipPath).size} bytes)`);
 
 await page.screenshot({ path: path.join(shotDir, "ui-batch.png"), fullPage: true });
+
+// row → Single-tab preview bridge
+await page.click("#batch-table .link-btn >> nth=2");
+check(await page.locator("#panel-single:not(.hidden)").count() === 1, "row click opens Single tab");
+check((await page.inputValue("#qr-content")).includes("setu"), "row URL loaded into content field");
+await page.click("#tab-batch");
 
 // --- Mobile viewport ---
 await page.setViewportSize({ width: 375, height: 800 });

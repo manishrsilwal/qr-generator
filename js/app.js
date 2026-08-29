@@ -238,6 +238,7 @@
     const empty = !state.content;
     $("btn-download-png").disabled = empty;
     $("btn-download-svg").disabled = empty;
+    $("btn-copy-png").disabled = empty;
     // Dense-code guideline: long content means small modules that scan
     // poorly in print — surface it before the user finds out at the printer.
     const hint = $("content-hint");
@@ -250,7 +251,14 @@
     }
   }
 
+  // Select the seeded example on first focus so typing replaces it directly
+  let contentPristine = true;
+  $("qr-content").addEventListener("focus", (e) => {
+    if (contentPristine) e.target.select();
+  });
+
   $("qr-content").addEventListener("input", (e) => {
+    contentPristine = false;
     state.content = e.target.value.trim();
     syncContentState();
     refreshPreview();
@@ -270,7 +278,9 @@
       refreshPreview();
     });
     hexInput.addEventListener("input", () => {
-      const v = hexInput.value.trim();
+      let v = hexInput.value.trim();
+      // accept #rgb shorthand
+      if (/^#[0-9a-fA-F]{3}$/.test(v)) v = "#" + [...v.slice(1)].map((c) => c + c).join("");
       if (/^#[0-9a-fA-F]{6}$/.test(v)) {
         state[key] = v;
         colorInput.value = v;
@@ -307,15 +317,19 @@
   });
 
   // ---------- Segmented helpers ----------
+  function setSegmented(containerId, datasetKey, value) {
+    $(containerId).querySelectorAll(".seg-btn").forEach((b) => {
+      const on = b.dataset[datasetKey] === value;
+      b.classList.toggle("active", on);
+      if (b.getAttribute("role") === "radio") b.setAttribute("aria-checked", String(on));
+    });
+  }
+
   function bindSegmented(containerId, datasetKey, apply) {
-    const container = $(containerId);
-    container.addEventListener("click", (e) => {
+    $(containerId).addEventListener("click", (e) => {
       const btn = e.target.closest(".seg-btn");
       if (!btn) return;
-      container.querySelectorAll(".seg-btn").forEach((b) => {
-        b.classList.toggle("active", b === btn);
-        if (b.getAttribute("role") === "radio") b.setAttribute("aria-checked", String(b === btn));
-      });
+      setSegmented(containerId, datasetKey, btn.dataset[datasetKey]);
       apply(btn.dataset[datasetKey]);
     });
   }
@@ -405,6 +419,67 @@
 
   $("btn-download-png").addEventListener("click", () => downloadSingle("png"));
   $("btn-download-svg").addEventListener("click", () => downloadSingle("svg"));
+
+  // ---------- Copy to clipboard ----------
+  if (!(navigator.clipboard && window.ClipboardItem)) {
+    $("btn-copy-png").classList.add("hidden"); // no clipboard-image support
+  }
+  $("btn-copy-png").addEventListener("click", async () => {
+    try {
+      const qr = new QRCodeStyling(buildOptions());
+      const blob = await qr.getRawData("png");
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+      showToast("PNG copied to clipboard");
+    } catch {
+      showToast("Copy failed — try downloading instead");
+    }
+  });
+
+  // ---------- Reset design ----------
+  const DESIGN_DEFAULTS = {
+    dotsType: "dots",
+    dotsColor: "#000000",
+    dotsColor2: "#0D9488",
+    dotsGradient: false,
+    bgColor: "#ffffff",
+    bgTransparent: false,
+    cornersSquareType: "extra-rounded",
+    cornersDotType: "dot",
+    ecc: "H",
+    logo: null,
+    logoSize: 0.3,
+    logoHideDots: true,
+  };
+
+  $("btn-reset-design").addEventListener("click", () => {
+    Object.assign(state, DESIGN_DEFAULTS);
+    styleGrid.querySelectorAll(".style-option").forEach((b) => {
+      const on = b.dataset.value === state.dotsType;
+      b.classList.toggle("active", on);
+      b.setAttribute("aria-checked", String(on));
+    });
+    $("dots-color").value = state.dotsColor;
+    $("dots-color-hex").value = state.dotsColor;
+    $("dots-color2").value = state.dotsColor2;
+    $("dots-color2-hex").value = state.dotsColor2;
+    $("bg-color").value = state.bgColor;
+    $("bg-color-hex").value = state.bgColor;
+    $("dots-gradient-toggle").checked = false;
+    $("dots-color2-wrap").classList.add("hidden");
+    $("bg-transparent").checked = false;
+    $("bg-color-row").style.opacity = "1";
+    setSegmented("corner-square-style", "value", state.cornersSquareType);
+    setSegmented("corner-dot-style", "value", state.cornersDotType);
+    setEcc(state.ecc);
+    $("logo-input").value = "";
+    $("logo-chip").classList.add("hidden");
+    $("logo-options").classList.add("hidden");
+    $("logo-size").value = "30";
+    $("logo-size-val").textContent = "30%";
+    $("logo-hide-dots").checked = true;
+    refreshPreview();
+    showToast("Design reset to defaults");
+  });
 
   // ---------- Toast ----------
   let toastTimer = null;
@@ -527,17 +602,29 @@
     tbody.textContent = "";
     view.forEach((row) => {
       const tr = document.createElement("tr");
-      [
-        [String(row.index), "mono"],
-        [row.name, ""],
-        [row.url || "(missing url)", "mono"],
-      ].forEach(([text, cls]) => {
-        const td = document.createElement("td");
-        if (cls) td.className = cls;
-        td.textContent = text;
-        td.title = text;
-        tr.appendChild(td);
-      });
+
+      const tdIndex = document.createElement("td");
+      tdIndex.className = "mono";
+      tdIndex.textContent = String(row.index);
+      tr.appendChild(tdIndex);
+
+      // bridge to the Single tab: inspect any row without retyping its URL
+      const tdName = document.createElement("td");
+      const nameBtn = document.createElement("button");
+      nameBtn.type = "button";
+      nameBtn.className = "link-btn";
+      nameBtn.textContent = row.name;
+      nameBtn.title = row.valid ? `Preview “${row.name}” in the Single tab` : row.name;
+      nameBtn.disabled = !row.valid;
+      nameBtn.addEventListener("click", () => previewRow(row));
+      tdName.appendChild(nameBtn);
+      tr.appendChild(tdName);
+
+      const tdUrl = document.createElement("td");
+      tdUrl.className = "mono";
+      tdUrl.textContent = row.url || "(missing url)";
+      tdUrl.title = tdUrl.textContent;
+      tr.appendChild(tdUrl);
       const tdBadge = document.createElement("td");
       const badge = document.createElement("span");
       badge.className = `row-badge ${row.valid ? "ok" : "bad"}`;
@@ -552,6 +639,18 @@
     $("btn-batch-generate").disabled = validCount === 0;
   }
 
+  function previewRow(row) {
+    state.content = row.url;
+    state.fileName = row.name;
+    $("qr-content").value = row.url;
+    $("qr-name").value = row.name;
+    contentPristine = false;
+    setTab("single");
+    syncContentState();
+    refreshPreview();
+    showToast(`Previewing “${row.name}”`);
+  }
+
   $("batch-table").querySelector("thead").addEventListener("click", (e) => {
     const th = e.target.closest("th[data-sort]");
     if (!th || !state.batchRows.length) return;
@@ -564,6 +663,12 @@
   });
 
   // ---------- Batch: generate ZIP ----------
+  let batchAbort = false;
+  $("btn-batch-cancel").addEventListener("click", () => {
+    batchAbort = true;
+    $("btn-batch-cancel").disabled = true;
+  });
+
   $("btn-batch-generate").addEventListener("click", async () => {
     const rows = state.batchRows.filter((r) => r.valid);
     if (!rows.length) return;
@@ -574,6 +679,8 @@
     const label = $("batch-progress-label");
 
     btn.disabled = true;
+    batchAbort = false;
+    $("btn-batch-cancel").disabled = false;
     progress.classList.remove("hidden");
 
     try {
@@ -583,6 +690,7 @@
       const usedNames = new Map();
 
       for (let i = 0; i < rows.length; i++) {
+        if (batchAbort) break;
         const row = rows[i];
         bar.style.width = `${Math.round((i / rows.length) * 100)}%`;
         label.textContent = `Generating ${i + 1} of ${rows.length}: ${row.name}`;
@@ -597,17 +705,39 @@
         if (wantPng) zip.file(`${base}.png`, await qr.getRawData("png"));
       }
 
-      bar.style.width = "100%";
-      label.textContent = "Packaging ZIP…";
-      const blob = await zip.generateAsync({ type: "blob" });
-      triggerDownload(blob, "qr-codes.zip");
-      label.textContent = `Done — ${rows.length} QR code${rows.length === 1 ? "" : "s"} downloaded.`;
-      showToast(`qr-codes.zip — ${rows.length} code${rows.length === 1 ? "" : "s"} downloaded`);
+      if (batchAbort) {
+        label.textContent = "Cancelled — nothing was downloaded.";
+      } else {
+        bar.style.width = "100%";
+        label.textContent = "Packaging ZIP…";
+        const blob = await zip.generateAsync({ type: "blob" });
+        triggerDownload(blob, "qr-codes.zip");
+        label.textContent = `Done — ${rows.length} QR code${rows.length === 1 ? "" : "s"} downloaded.`;
+        showToast(`qr-codes.zip — ${rows.length} code${rows.length === 1 ? "" : "s"} downloaded`);
+      }
     } catch (err) {
       label.textContent = `Failed: ${err.message}`;
     } finally {
       btn.disabled = false;
+      $("btn-batch-cancel").disabled = true;
     }
+  });
+
+  // ---------- Keyboard: WAI-ARIA radiogroup pattern ----------
+  // Arrow keys move and select within every radiogroup (shapes, corners,
+  // correction level, export size, batch format).
+  document.querySelectorAll('[role="radiogroup"]').forEach((group) => {
+    group.addEventListener("keydown", (e) => {
+      const delta = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+      if (!delta) return;
+      const radios = [...group.querySelectorAll('[role="radio"]')];
+      const i = radios.indexOf(document.activeElement);
+      if (i === -1) return;
+      e.preventDefault();
+      const next = radios[(i + delta + radios.length) % radios.length];
+      next.focus();
+      next.click();
+    });
   });
 
   // ---------- Init ----------
