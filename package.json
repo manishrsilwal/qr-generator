@@ -1,0 +1,23 @@
+{
+  "name": "qr-generator",
+  "version": "1.0.0",
+  "description": "QR Studio — single and batch (CSV) QR code generator with styled designs and SVG/PNG export",
+  "scripts": {
+    "start": "npx serve .",
+    "batch": "node scripts/generate-batch.mjs",
+    "verify": "node scripts/verify-output.mjs",
+    "test": "node scripts/e2e-test.mjs"
+  },
+  "license": "MIT",
+  "type": "commonjs",
+  "dependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "jsdom": "^29.1.1",
+    "pngjs": "^7.0.0",
+    "qr-code-styling": "^1.9.2",
+    "zxing-wasm": "^3.1.3"
+  },
+  "devDependencies": {
+    "playwright": "^1.62.1"
+  }
+}
