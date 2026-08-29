@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>QR Studio — QR Code Generator</title>
+  <title>Tessel — QR Code Generator</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -11,7 +11,7 @@
   <script>
     // Apply the saved theme before first paint to avoid a flash
     try {
-      const t = localStorage.getItem("qr-studio-theme");
+      const t = localStorage.getItem("tessel-theme");
       if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
     } catch {}
   </script>
@@ -24,7 +24,7 @@
         <svg class="brand-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
           <path d="M3 3h8v8H3V3zm2 2v4h4V5H5zm8-2h8v8h-8V3zm2 2v4h4V5h-4zM3 13h8v8H3v-8zm2 2v4h4v-4H5zm13-2h3v3h-3v-3zm-5 0h3v3h-3v-3zm0 5h3v3h-3v-3zm5 0h3v3h-3v-3z"/>
         </svg>
-        <span class="brand-name">QR Studio</span>
+        <span class="brand-name">Tessel</span>
       </div>
       <div class="topbar-actions">
         <nav class="tabs" role="tablist" aria-label="Generator mode">

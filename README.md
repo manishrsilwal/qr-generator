@@ -1,8 +1,8 @@
-# QR Studio
+# Tessel
 
 A QR code generator with single and batch (CSV) generation, styled QR designs, and SVG/PNG export.
 
-![QR Studio](scripts/screenshots/ui-single.png)
+![Tessel](scripts/screenshots/ui-single.png)
 
 ## Features
 

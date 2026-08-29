@@ -1,4 +1,4 @@
-/* QR Studio — single + batch QR generation with qr-code-styling */
+/* Tessel — single + batch QR generation with qr-code-styling */
 (() => {
   "use strict";
 
@@ -383,7 +383,7 @@
   themeBtn.addEventListener("click", () => {
     const next = effectiveTheme() === "dark" ? "light" : "dark";
     document.documentElement.dataset.theme = next;
-    try { localStorage.setItem("qr-studio-theme", next); } catch {}
+    try { localStorage.setItem("tessel-theme", next); } catch {}
     syncThemeLabel();
   });
   syncThemeLabel();

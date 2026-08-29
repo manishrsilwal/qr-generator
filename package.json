@@ -1,7 +1,7 @@
 {
   "name": "qr-generator",
   "version": "1.0.0",
-  "description": "QR Studio — single and batch (CSV) QR code generator with styled designs and SVG/PNG export",
+  "description": "Tessel — single and batch (CSV) QR code generator with styled designs and SVG/PNG export",
   "scripts": {
     "start": "bunx serve .",
     "batch": "bun scripts/generate-batch.mjs",
