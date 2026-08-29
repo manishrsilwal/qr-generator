@@ -101,6 +101,21 @@
   let zxingFailed = false;
   let scanRunId = 0;
 
+  const BADGE_ICONS = {
+    ok: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m8 12.5 2.5 2.5L16 9.5"/></svg>',
+    bad: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 9 6 6M15 9l-6 6"/></svg>',
+    checking: '<svg class="spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.2-8.56"/></svg>',
+  };
+
+  function setBadge(stateName, title, advice) {
+    scanBadge.hidden = false;
+    scanBadge.className = `scan-badge ${stateName}`;
+    scanBadge.setAttribute("aria-busy", String(stateName === "checking"));
+    $("scan-icon").innerHTML = BADGE_ICONS[stateName];
+    $("scan-title").textContent = title;
+    $("scan-advice").textContent = advice;
+  }
+
   async function loadZxing() {
     if (zxingReader || zxingFailed) return zxingReader;
     try {
@@ -119,9 +134,15 @@
     const reader = await loadZxing();
     if (!reader) return;
 
-    scanBadge.hidden = false;
-    scanBadge.className = "scan-badge checking";
-    scanBadge.textContent = "Checking scannability…";
+    // Anti-flash: keep the settled state dimmed, and only swap to the
+    // spinner if the decode is still running after 350ms.
+    const hasSettledState = !scanBadge.hidden && !scanBadge.classList.contains("checking");
+    if (hasSettledState) scanBadge.classList.add("stale");
+    const checkingTimer = setTimeout(() => {
+      if (runId === scanRunId) {
+        setBadge("checking", "Verifying scannability…", "Decoding the export-size image with ZXing.");
+      }
+    }, hasSettledState ? 350 : 0);
 
     try {
       // Verify at export size so the result reflects the real download
@@ -132,15 +153,15 @@
         tryHarder: true,
       });
       if (runId !== scanRunId) return; // stale check, newer one is running
+      clearTimeout(checkingTimer);
       const decoded = results.length && results[0].isValid ? results[0].text : null;
       if (decoded === (state.content || " ")) {
-        scanBadge.className = "scan-badge ok";
-        scanBadge.textContent = "✓ Verified scannable";
+        setBadge("ok", "Verified scannable", `Decoded correctly at ${state.size}px export size.`);
       } else {
-        scanBadge.className = "scan-badge bad";
-        scanBadge.textContent = "✗ Hard to scan — increase contrast, reduce logo size, or raise correction level";
+        setBadge("bad", "Hard to scan", "Increase contrast, reduce the logo size, or raise the correction level.");
       }
     } catch {
+      clearTimeout(checkingTimer);
       if (runId === scanRunId) scanBadge.hidden = true;
     }
   }
@@ -248,7 +269,10 @@
     container.addEventListener("click", (e) => {
       const btn = e.target.closest(".seg-btn");
       if (!btn) return;
-      container.querySelectorAll(".seg-btn").forEach((b) => b.classList.toggle("active", b === btn));
+      container.querySelectorAll(".seg-btn").forEach((b) => {
+        b.classList.toggle("active", b === btn);
+        if (b.getAttribute("role") === "radio") b.setAttribute("aria-checked", String(b === btn));
+      });
       apply(btn.dataset[datasetKey]);
     });
   }
@@ -324,10 +348,45 @@
   async function downloadSingle(extension) {
     const qr = new QRCodeStyling(buildOptions());
     await qr.download({ name: singleFileName(), extension });
+    showToast(`Downloaded ${singleFileName()}.${extension}`);
   }
 
   $("btn-download-png").addEventListener("click", () => downloadSingle("png"));
   $("btn-download-svg").addEventListener("click", () => downloadSingle("svg"));
+
+  // ---------- Toast ----------
+  let toastTimer = null;
+  function showToast(message) {
+    const toast = $("toast");
+    toast.innerHTML = `${BADGE_ICONS.ok}<span></span>`;
+    toast.querySelector("span").textContent = message;
+    toast.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove("show"), 2600);
+  }
+
+  // ---------- Theme toggle ----------
+  const themeBtn = $("theme-toggle");
+
+  function effectiveTheme() {
+    return document.documentElement.dataset.theme ||
+      (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  }
+
+  function syncThemeLabel() {
+    themeBtn.setAttribute(
+      "aria-label",
+      effectiveTheme() === "dark" ? "Switch to light theme" : "Switch to dark theme"
+    );
+  }
+
+  themeBtn.addEventListener("click", () => {
+    const next = effectiveTheme() === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem("qr-studio-theme", next); } catch {}
+    syncThemeLabel();
+  });
+  syncThemeLabel();
 
   // ---------- Tabs ----------
   const tabSingle = $("tab-single");
@@ -396,30 +455,61 @@
         state.batchRows = data.map((row, i) => {
           const url = normalizeUrl(row.url);
           return {
+            index: i + 1,
             name: safeFilename(row.qrName) || `qr-${i + 1}`,
             url,
             valid: Boolean(url),
           };
         });
-        renderBatchPreview(file.name);
+        batchSort = { key: "index", dir: 1 };
+        batchFileName = file.name;
+        renderBatchPreview();
       },
       error: (err) => alert(`Could not parse CSV: ${err.message}`),
     });
   }
 
-  function renderBatchPreview(fileName) {
+  let batchSort = { key: "index", dir: 1 };
+  let batchFileName = "";
+
+  const ROW_ICONS = {
+    ok: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="m5 13 4 4L19 7"/></svg>',
+    bad: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>',
+  };
+
+  function renderBatchPreview() {
     const rows = state.batchRows;
     const validCount = rows.filter((r) => r.valid).length;
     $("batch-summary").innerHTML =
-      `<strong>${fileName}</strong> — ${validCount} of ${rows.length} row${rows.length === 1 ? "" : "s"} ready to generate.`;
+      `<strong>${batchFileName}</strong> — ${validCount} of ${rows.length} row${rows.length === 1 ? "" : "s"} ready to generate.`;
+
+    // sorted view for the table only; generation keeps CSV order
+    const view = [...rows].sort((a, b) => {
+      const { key, dir } = batchSort;
+      const av = a[key], bv = b[key];
+      if (typeof av === "string") return av.localeCompare(bv) * dir;
+      return (av === bv ? 0 : av < bv ? -1 : 1) * dir;
+    });
+
+    document.querySelectorAll("#batch-table th").forEach((th) => {
+      if (th.dataset.sort === batchSort.key) {
+        th.setAttribute("aria-sort", batchSort.dir === 1 ? "ascending" : "descending");
+      } else {
+        th.removeAttribute("aria-sort");
+      }
+    });
 
     const tbody = $("batch-table").querySelector("tbody");
     tbody.textContent = "";
-    rows.forEach((row, i) => {
+    view.forEach((row) => {
       const tr = document.createElement("tr");
-      const cells = [String(i + 1), row.name, row.url || "(missing url)"];
-      cells.forEach((text) => {
+      [
+        [String(row.index), "mono"],
+        [row.name, ""],
+        [row.url || "(missing url)", "mono"],
+      ].forEach(([text, cls]) => {
         const td = document.createElement("td");
+        if (cls) td.className = cls;
         td.textContent = text;
         td.title = text;
         tr.appendChild(td);
@@ -427,7 +517,8 @@
       const tdBadge = document.createElement("td");
       const badge = document.createElement("span");
       badge.className = `row-badge ${row.valid ? "ok" : "bad"}`;
-      badge.textContent = row.valid ? "ready" : "skipped";
+      badge.innerHTML = `${row.valid ? ROW_ICONS.ok : ROW_ICONS.bad}<span></span>`;
+      badge.querySelector("span").textContent = row.valid ? "ready" : "skipped";
       tdBadge.appendChild(badge);
       tr.appendChild(tdBadge);
       tbody.appendChild(tr);
@@ -436,6 +527,17 @@
     $("batch-preview").classList.remove("hidden");
     $("btn-batch-generate").disabled = validCount === 0;
   }
+
+  $("batch-table").querySelector("thead").addEventListener("click", (e) => {
+    const th = e.target.closest("th[data-sort]");
+    if (!th || !state.batchRows.length) return;
+    const key = th.dataset.sort;
+    batchSort = {
+      key,
+      dir: batchSort.key === key ? -batchSort.dir : 1,
+    };
+    renderBatchPreview();
+  });
 
   // ---------- Batch: generate ZIP ----------
   $("btn-batch-generate").addEventListener("click", async () => {
@@ -480,6 +582,7 @@
       a.click();
       URL.revokeObjectURL(a.href);
       label.textContent = `Done — ${rows.length} QR code${rows.length === 1 ? "" : "s"} downloaded.`;
+      showToast(`qr-codes.zip — ${rows.length} code${rows.length === 1 ? "" : "s"} downloaded`);
     } catch (err) {
       label.textContent = `Failed: ${err.message}`;
     } finally {

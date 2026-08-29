@@ -83,6 +83,14 @@ check(!stillGradient, "gradient fully removed after untoggle");
 
 await page.screenshot({ path: path.join(shotDir, "ui-single.png"), fullPage: true });
 
+// --- Theme toggle ---
+await page.click("#theme-toggle");
+const stampedTheme = await page.evaluate(() => document.documentElement.dataset.theme);
+check(stampedTheme === "dark", `theme toggle stamps data-theme="dark" (got "${stampedTheme}")`);
+await page.waitForTimeout(250);
+await page.screenshot({ path: path.join(shotDir, "ui-dark.png"), fullPage: true });
+await page.click("#theme-toggle");
+
 // --- Batch flow ---
 await page.click("#tab-batch");
 await page.setInputFiles("#csv-input", "SampleFiles/batch_links.csv");
