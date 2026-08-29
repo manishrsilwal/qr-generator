@@ -365,28 +365,6 @@
     toastTimer = setTimeout(() => toast.classList.remove("show"), 2600);
   }
 
-  // ---------- Theme toggle ----------
-  const themeBtn = $("theme-toggle");
-
-  function effectiveTheme() {
-    return document.documentElement.dataset.theme ||
-      (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-  }
-
-  function syncThemeLabel() {
-    themeBtn.setAttribute(
-      "aria-label",
-      effectiveTheme() === "dark" ? "Switch to light theme" : "Switch to dark theme"
-    );
-  }
-
-  themeBtn.addEventListener("click", () => {
-    const next = effectiveTheme() === "dark" ? "light" : "dark";
-    document.documentElement.dataset.theme = next;
-    try { localStorage.setItem("tessel-theme", next); } catch {}
-    syncThemeLabel();
-  });
-  syncThemeLabel();
 
   // ---------- Tabs ----------
   const tabSingle = $("tab-single");

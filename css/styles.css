@@ -3,8 +3,7 @@
    Vanilla token-based CSS. Google Sans for all text; hierarchy comes from
    weight (400 body / 500 controls / 600 headings / 700 brand & verdict),
    case, and tabular figures for data.
-   Light + dark themes: :root = light, media-query dark for "system",
-   [data-theme] overrides for the explicit toggle.
+   Single light theme by design.
    ========================================================================== */
 
 :root {
@@ -40,60 +39,6 @@
   --radius: 10px;
   --radius-sm: 8px;
   --t: 160ms ease;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #0c1319;
-    --card: #131c24;
-    --inset: #1a252f;
-    --text: #e6edf3;
-    --text-muted: #93a4b4;
-    --border: #243140;
-    --border-strong: #35455a;
-    --brand: #14b8a6;          /* dark-ink text on this fills to ~8:1 */
-    --brand-hover: #2dd4bf;
-    --brand-ink: #2dd4bf;
-    --brand-text: #5eead4;
-    --brand-soft: #12312e;
-    --brand-soft-border: #1d5c55;
-    --on-brand: #04211d;
-    --ok: #4ade80;
-    --ok-bg: #122d1d;
-    --err: #f87171;
-    --err-bg: #371519;
-    --focus: #2dd4bf;
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
-    --thumb-tile: #e6edf3;
-    --checker-a: #1a252f;
-    --checker-b: #22303c;
-  }
-}
-
-:root[data-theme="dark"] {
-  --bg: #0c1319;
-  --card: #131c24;
-  --inset: #1a252f;
-  --text: #e6edf3;
-  --text-muted: #93a4b4;
-  --border: #243140;
-  --border-strong: #35455a;
-  --brand: #14b8a6;
-  --brand-hover: #2dd4bf;
-  --brand-ink: #2dd4bf;
-  --brand-text: #5eead4;
-  --brand-soft: #12312e;
-  --brand-soft-border: #1d5c55;
-  --on-brand: #04211d;
-  --ok: #4ade80;
-  --ok-bg: #122d1d;
-  --err: #f87171;
-  --err-bg: #371519;
-  --focus: #2dd4bf;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --thumb-tile: #e6edf3;
-  --checker-a: #1a252f;
-  --checker-b: #22303c;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -182,28 +127,6 @@ button { cursor: pointer; }
 .tab svg { width: 15px; height: 15px; }
 .tab:hover { color: var(--text); }
 .tab.active { background: var(--brand); color: var(--on-brand); }
-
-.icon-btn {
-  display: grid;
-  place-items: center;
-  width: 38px;
-  height: 38px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--card);
-  color: var(--text-muted);
-  transition: color var(--t), border-color var(--t), background var(--t);
-}
-.icon-btn:hover { color: var(--brand-ink); border-color: var(--border-strong); }
-.icon-btn svg { width: 18px; height: 18px; }
-/* sun/moon swap driven by the same theme states as the tokens */
-.icon-btn .icon-moon { display: none; }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .icon-btn .icon-sun { display: none; }
-  :root:not([data-theme="light"]) .icon-btn .icon-moon { display: block; }
-}
-:root[data-theme="dark"] .icon-btn .icon-sun { display: none; }
-:root[data-theme="dark"] .icon-btn .icon-moon { display: block; }
 
 /* ---------- Layout ---------- */
 .layout {
