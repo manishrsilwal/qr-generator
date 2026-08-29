@@ -16,7 +16,7 @@ A QR code generator with single and batch (CSV) generation, styled QR designs, a
 It's a static site — no build step. Serve the folder and open it:
 
 ```bash
-npx serve .
+bunx serve .
 # or
 python3 -m http.server 8000
 ```
@@ -25,22 +25,23 @@ Then open http://localhost:8000 (or the URL `serve` prints). Opening `index.html
 
 ## CLI batch generation
 
-Generate QR codes from a CSV without the browser (used for the urgent batch in `output/`):
+Generate QR codes from a CSV without the browser:
 
 ```bash
-npm install
-npm run batch                 # reads SampleFiles/batch_links.csv → output/
-node scripts/generate-batch.mjs path/to/file.csv out-dir
-npm run verify                # decodes every PNG in output/ to prove it scans
+bun install
+bun scripts/generate-batch.mjs path/to/file.csv out-dir
+bun run verify                # decodes every PNG in output/ to prove it scans
 ```
+
+`bun run batch` with no arguments expects `SampleFiles/batch_links.csv` and writes to `output/` — both directories are local-only (gitignored), so create your own CSV or pass explicit paths.
 
 ## Tests
 
 ```bash
-npm test   # headless-browser smoke test: single flow, batch flow, downloads, responsive check
+bun run test   # headless-browser smoke test: single flow, batch flow, downloads, responsive check
 ```
 
-Requires Playwright's Chromium (`npx playwright install chromium`).
+Requires Playwright's Chromium (`bunx playwright install chromium`). The batch part of the test also needs a local `SampleFiles/batch_links.csv`.
 
 ## CSV format
 

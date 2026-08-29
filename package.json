@@ -3,10 +3,10 @@
   "version": "1.0.0",
   "description": "QR Studio — single and batch (CSV) QR code generator with styled designs and SVG/PNG export",
   "scripts": {
-    "start": "npx serve .",
-    "batch": "node scripts/generate-batch.mjs",
-    "verify": "node scripts/verify-output.mjs",
-    "test": "node scripts/e2e-test.mjs"
+    "start": "bunx serve .",
+    "batch": "bun scripts/generate-batch.mjs",
+    "verify": "bun scripts/verify-output.mjs",
+    "test": "bun scripts/e2e-test.mjs"
   },
   "license": "MIT",
   "type": "commonjs",
