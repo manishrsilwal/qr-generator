@@ -7,7 +7,10 @@
   // ---------- State ----------
   const state = {
     content: "https://example.com",
+    contentType: "url",
     fileName: "",
+    frame: false,
+    frameLabel: "SCAN ME",
     size: 1024,
     dotsType: "dots",
     dotsColor: "#000000",
@@ -96,6 +99,7 @@
     new QRCodeStyling(buildOptions({ size: 300 })).append(previewEl);
     clearTimeout(scanCheckTimer);
     scanCheckTimer = setTimeout(runScanCheck, 500);
+    syncFrameBand();
     // batch codes share the design, so a design change makes any per-row
     // "verified" claim stale — content-only changes (designChanged=false) don't
     if (designChanged && state.batchRows.some((r) => r.verified !== undefined)) {
@@ -124,6 +128,51 @@
     $("scan-icon").innerHTML = BADGE_ICONS[stateName];
     $("scan-title").textContent = title;
     $("scan-advice").textContent = advice;
+  }
+
+  // ---------- Artifact rendering (QR + optional frame) ----------
+  const escapeXml = (s) => s.replace(/[<>&"']/g, (c) => `&#${c.charCodeAt(0)};`);
+
+  function svgToPngBlob(svgString, w, h) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(new Blob([svgString], { type: "image/svg+xml" }));
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext("2d").drawImage(img, 0, 0);
+        URL.revokeObjectURL(url);
+        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("PNG render failed"))), "image/png");
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("SVG render failed")); };
+      img.src = url;
+    });
+  }
+
+  // Renders the final deliverable. With the frame off this is the raw QR;
+  // with it on, the QR is composed inside a labelled frame (the band sits
+  // outside the ISO quiet zone, so scannability is unaffected).
+  async function renderArtifact(kind, dataOverride) {
+    const qr = new QRCodeStyling(buildOptions(dataOverride ? { data: dataOverride } : {}));
+    if (!state.frame) return qr.getRawData(kind);
+
+    const size = state.size;
+    const band = Math.round(size * 0.16);
+    const radius = Math.round(size * 0.05);
+    const frameColor = state.dotsColor;
+    const textColor = relativeLuminance(frameColor) > 0.45 ? "#111111" : "#ffffff";
+    const inner = (await (await qr.getRawData("svg")).text()).replace(/^<\?xml[^>]*\?>\s*/, "");
+    const svg =
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size + band}" viewBox="0 0 ${size} ${size + band}">` +
+      (state.bgTransparent ? "" : `<rect width="${size}" height="${size + band}" rx="${radius}" fill="${state.bgColor}"/>`) +
+      inner +
+      `<rect y="${size}" width="${size}" height="${band}" rx="${radius}" fill="${frameColor}"/>` +
+      `<rect y="${size}" width="${size}" height="${radius}" fill="${frameColor}"/>` +
+      `<text x="${size / 2}" y="${size + band * 0.68}" text-anchor="middle" font-family="'Google Sans', Arial, sans-serif" font-size="${Math.round(band * 0.48)}" font-weight="700" letter-spacing="${Math.round(band * 0.03)}" fill="${textColor}">${escapeXml(state.frameLabel || "SCAN ME")}</text>` +
+      `</svg>`;
+    if (kind === "svg") return new Blob([svg], { type: "image/svg+xml" });
+    return svgToPngBlob(svg, size, size + band);
   }
 
   // Guideline cautions that apply even when the code decodes: ZXing reads
@@ -180,9 +229,8 @@
     }, hasSettledState ? 350 : 0);
 
     try {
-      // Verify at export size so the result reflects the real download
-      const qr = new QRCodeStyling(buildOptions());
-      const blob = await qr.getRawData("png");
+      // Verify the real deliverable: export size, frame included
+      const blob = await renderArtifact("png");
       const results = await reader.readBarcodes(blob, {
         formats: ["QRCode"],
         tryHarder: true,
@@ -260,17 +308,193 @@
     }
   }
 
+  // ---------- Content types (static payload formats — no backend needed) ----------
+  const wifiEsc = (s) => (s || "").replace(/([\\;,:"])/g, "\\$1");
+  const vEsc = (s) => (s || "").replace(/([\\;,])/g, "\\$1").replace(/\n/g, "\\n");
+
+  const CONTENT_TYPES = {
+    url: { label: "URL", inputLabel: "URL", placeholder: "https://example.com" },
+    text: { label: "Text", inputLabel: "Text", placeholder: "Any plain text" },
+    wifi: {
+      label: "Wi-Fi",
+      fields: [
+        { id: "ssid", label: "Network name (SSID)" },
+        { id: "pass", label: "Password" },
+        { id: "sec", label: "Security", type: "select", options: ["WPA", "WEP", "None"] },
+      ],
+      build: (v) => {
+        if (!v.ssid) return "";
+        const sec = v.sec === "None" ? "nopass" : (v.sec || "WPA");
+        const pass = sec === "nopass" ? "" : `P:${wifiEsc(v.pass)};`;
+        return `WIFI:T:${sec};S:${wifiEsc(v.ssid)};${pass};`;
+      },
+    },
+    vcard: {
+      label: "vCard",
+      fields: [
+        { id: "first", label: "First name" },
+        { id: "last", label: "Last name" },
+        { id: "phone", label: "Phone" },
+        { id: "email", label: "Email" },
+        { id: "org", label: "Organization" },
+        { id: "site", label: "Website" },
+      ],
+      build: (v) => {
+        if (!v.first && !v.last && !v.phone && !v.email) return "";
+        const lines = ["BEGIN:VCARD", "VERSION:3.0", `N:${vEsc(v.last)};${vEsc(v.first)}`, `FN:${vEsc([v.first, v.last].filter(Boolean).join(" "))}`];
+        if (v.org) lines.push(`ORG:${vEsc(v.org)}`);
+        if (v.phone) lines.push(`TEL:${vEsc(v.phone)}`);
+        if (v.email) lines.push(`EMAIL:${vEsc(v.email)}`);
+        if (v.site) lines.push(`URL:${vEsc(v.site)}`);
+        lines.push("END:VCARD");
+        return lines.join("\n");
+      },
+    },
+    email: {
+      label: "Email",
+      fields: [
+        { id: "to", label: "To" },
+        { id: "subject", label: "Subject" },
+        { id: "body", label: "Message" },
+      ],
+      build: (v) => {
+        if (!v.to) return "";
+        const params = [];
+        if (v.subject) params.push(`subject=${encodeURIComponent(v.subject)}`);
+        if (v.body) params.push(`body=${encodeURIComponent(v.body)}`);
+        return `mailto:${v.to}${params.length ? `?${params.join("&")}` : ""}`;
+      },
+    },
+    phone: {
+      label: "Phone",
+      fields: [{ id: "num", label: "Phone number" }],
+      build: (v) => (v.num ? `tel:${v.num.replace(/[^\d+]/g, "")}` : ""),
+    },
+    sms: {
+      label: "SMS",
+      fields: [
+        { id: "num", label: "Phone number" },
+        { id: "msg", label: "Message" },
+      ],
+      build: (v) => (v.num ? `SMSTO:${v.num.replace(/[^\d+]/g, "")}:${v.msg || ""}` : ""),
+    },
+    whatsapp: {
+      label: "WhatsApp",
+      fields: [
+        { id: "num", label: "Phone number (with country code)" },
+        { id: "msg", label: "Pre-filled message" },
+      ],
+      build: (v) => {
+        const num = (v.num || "").replace(/\D/g, "");
+        if (!num) return "";
+        return `https://wa.me/${num}${v.msg ? `?text=${encodeURIComponent(v.msg)}` : ""}`;
+      },
+    },
+    geo: {
+      label: "Location",
+      fields: [
+        { id: "lat", label: "Latitude" },
+        { id: "lng", label: "Longitude" },
+      ],
+      build: (v) => {
+        const lat = parseFloat(v.lat), lng = parseFloat(v.lng);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return "";
+        return `geo:${lat},${lng}`;
+      },
+    },
+  };
+
+  const typeValues = {}; // remembered per type for the session
+
+  function buildTypeFields(type) {
+    const wrap = $("type-fields");
+    wrap.textContent = "";
+    const values = (typeValues[type] ||= {});
+    for (const f of CONTENT_TYPES[type].fields) {
+      const field = document.createElement("div");
+      field.className = "field";
+      const label = document.createElement("label");
+      label.htmlFor = `tf-${type}-${f.id}`;
+      label.textContent = f.label;
+      let input;
+      if (f.type === "select") {
+        input = document.createElement("select");
+        for (const opt of f.options) {
+          const o = document.createElement("option");
+          o.value = o.textContent = opt;
+          input.appendChild(o);
+        }
+        input.value = values[f.id] ?? f.options[0];
+      } else {
+        input = document.createElement("input");
+        input.type = "text";
+        input.spellcheck = false;
+        input.value = values[f.id] ?? "";
+      }
+      input.id = `tf-${type}-${f.id}`;
+      input.addEventListener("input", () => {
+        values[f.id] = input.value;
+        rebuildPayload();
+      });
+      field.append(label, input);
+      wrap.appendChild(field);
+    }
+  }
+
+  function rebuildPayload() {
+    const def = CONTENT_TYPES[state.contentType];
+    if (def.fields) {
+      state.content = def.build(typeValues[state.contentType] || {});
+      const preview = $("payload-preview");
+      preview.textContent = state.content;
+      preview.classList.toggle("hidden", !state.content);
+    } else {
+      state.content = $("qr-content").value.trim();
+      $("payload-preview").classList.add("hidden");
+    }
+    syncContentState();
+    refreshPreview(false);
+  }
+
+  function setContentType(type) {
+    state.contentType = type;
+    $("content-type").querySelectorAll(".chip").forEach((c) => {
+      const on = c.dataset.type === type;
+      c.classList.toggle("active", on);
+      c.setAttribute("aria-checked", String(on));
+    });
+    const def = CONTENT_TYPES[type];
+    $("main-content-field").classList.toggle("hidden", Boolean(def.fields));
+    $("type-fields").classList.toggle("hidden", !def.fields);
+    if (def.fields) buildTypeFields(type);
+    else {
+      $("qr-content-label").textContent = def.inputLabel;
+      $("qr-content").placeholder = def.placeholder;
+    }
+    rebuildPayload();
+  }
+
+  Object.entries(CONTENT_TYPES).forEach(([type, def]) => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "chip" + (type === state.contentType ? " active" : "");
+    chip.setAttribute("role", "radio");
+    chip.setAttribute("aria-checked", String(type === state.contentType));
+    chip.dataset.type = type;
+    chip.textContent = def.label;
+    chip.addEventListener("click", () => setContentType(type));
+    $("content-type").appendChild(chip);
+  });
+
   // Select the seeded example on first focus so typing replaces it directly
   let contentPristine = true;
   $("qr-content").addEventListener("focus", (e) => {
     if (contentPristine) e.target.select();
   });
 
-  $("qr-content").addEventListener("input", (e) => {
+  $("qr-content").addEventListener("input", () => {
     contentPristine = false;
-    state.content = e.target.value.trim();
-    syncContentState();
-    refreshPreview(false);
+    rebuildPayload();
   });
 
   $("qr-name").addEventListener("input", (e) => {
@@ -345,6 +569,30 @@
 
   bindSegmented("corner-square-style", "value", (v) => { state.cornersSquareType = v; refreshPreview(); });
   bindSegmented("corner-dot-style", "value", (v) => { state.cornersDotType = v; refreshPreview(); });
+
+  // ---------- Frame ----------
+  function syncFrameBand() {
+    const band = $("frame-band");
+    band.classList.toggle("hidden", !state.frame);
+    if (state.frame) {
+      band.textContent = state.frameLabel || "SCAN ME";
+      band.style.background = state.dotsColor;
+      band.style.color = relativeLuminance(state.dotsColor) > 0.45 ? "#111111" : "#ffffff";
+    }
+  }
+
+  bindSegmented("frame-style", "frame", (v) => {
+    state.frame = v === "label";
+    $("frame-label-field").classList.toggle("hidden", !state.frame);
+    syncFrameBand();
+    refreshPreview();
+  });
+
+  $("frame-label").addEventListener("input", (e) => {
+    state.frameLabel = e.target.value.trim();
+    syncFrameBand();
+    refreshPreview();
+  });
   bindSegmented("size-options", "size", (v) => { state.size = parseInt(v, 10); refreshPreview(); });
   bindSegmented("batch-format", "format", (v) => { state.batchFormat = v; });
 
@@ -421,8 +669,8 @@
   }
 
   async function downloadSingle(extension) {
-    const qr = new QRCodeStyling(buildOptions());
-    await qr.download({ name: singleFileName(), extension });
+    const blob = await renderArtifact(extension);
+    triggerDownload(blob, `${singleFileName()}.${extension}`);
     showToast(`Downloaded ${singleFileName()}.${extension}`);
   }
 
@@ -435,8 +683,7 @@
   }
   $("btn-copy-png").addEventListener("click", async () => {
     try {
-      const qr = new QRCodeStyling(buildOptions());
-      const blob = await qr.getRawData("png");
+      const blob = await renderArtifact("png");
       await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
       showToast("PNG copied to clipboard");
     } catch {
@@ -446,6 +693,8 @@
 
   // ---------- Reset design ----------
   const DESIGN_DEFAULTS = {
+    frame: false,
+    frameLabel: "SCAN ME",
     dotsType: "dots",
     dotsColor: "#000000",
     dotsColor2: "#0D9488",
@@ -479,6 +728,10 @@
     $("bg-color-row").style.opacity = "1";
     setSegmented("corner-square-style", "value", state.cornersSquareType);
     setSegmented("corner-dot-style", "value", state.cornersDotType);
+    setSegmented("frame-style", "frame", "none");
+    $("frame-label").value = state.frameLabel;
+    $("frame-label-field").classList.add("hidden");
+    syncFrameBand();
     setEcc(state.ecc);
     $("logo-input").value = "";
     $("logo-chip").classList.add("hidden");
@@ -723,10 +976,9 @@
         usedNames.set(row.name, count + 1);
         const base = count === 0 ? row.name : `${row.name} (${count + 1})`;
 
-        const qr = new QRCodeStyling(buildOptions({ data: row.url }));
-        if (wantSvg) zip.file(`${base}.svg`, await qr.getRawData("svg"));
+        if (wantSvg) zip.file(`${base}.svg`, await renderArtifact("svg", row.url));
         // PNG is always rendered: it is also the verification medium
-        const pngBlob = await qr.getRawData("png");
+        const pngBlob = await renderArtifact("png", row.url);
         if (wantPng) zip.file(`${base}.png`, pngBlob);
 
         if (reader) {

@@ -126,6 +126,34 @@ check(
 );
 await page.waitForTimeout(600);
 
+const waitBadgeOk = () =>
+  page.waitForFunction(() => document.getElementById("scan-badge")?.className === "scan-badge ok", null, { timeout: 30000 })
+    .then(() => true).catch(() => false);
+
+// content types: Wi-Fi payload builds and verifies
+await page.click('#content-type .chip[data-type="wifi"]');
+await page.fill("#tf-wifi-ssid", "Relief-Center");
+await page.fill("#tf-wifi-pass", "nepal2026");
+const wifiPayload = await page.locator("#payload-preview").textContent();
+check(wifiPayload.startsWith("WIFI:T:WPA;S:Relief-Center;"), `Wi-Fi payload built (${wifiPayload.trim()})`);
+await page.waitForTimeout(700);
+check(await waitBadgeOk(), "Wi-Fi QR verified scannable");
+await page.click('#content-type .chip[data-type="url"]');
+await page.waitForTimeout(400);
+
+// frame label: the composed artifact still verifies and downloads
+await page.click('#frame-style .seg-btn[data-frame="label"]');
+await page.waitForTimeout(700);
+check(await waitBadgeOk(), "framed code verified scannable");
+const dlFramed = page.waitForEvent("download");
+await page.click("#btn-download-png");
+const framedPath = path.join(shotDir, "framed.png");
+await (await dlFramed).saveAs(framedPath);
+check(fs.statSync(framedPath).size > 5000, "framed PNG downloaded");
+await page.screenshot({ path: path.join(shotDir, "ui-frame.png"), fullPage: false });
+await page.click('#frame-style .seg-btn[data-frame="none"]');
+await page.waitForTimeout(400);
+
 await page.screenshot({ path: path.join(shotDir, "ui-single.png"), fullPage: true });
 
 // --- Batch flow ---

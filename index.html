@@ -46,15 +46,21 @@
           </div>
           <div>
             <h2>Content</h2>
-            <p>Enter the URL or text your QR code should open.</p>
+            <p>Choose what the QR code opens, then fill in the details.</p>
           </div>
         </div>
         <div class="card-body">
           <div class="field">
-            <label for="qr-content">URL or text</label>
-            <textarea id="qr-content" rows="2" placeholder="https://example.com" spellcheck="false">https://example.com</textarea>
-            <p class="hint" id="content-hint" hidden></p>
+            <span class="label">Type</span>
+            <div class="chip-row" id="content-type" role="radiogroup" aria-label="Content type"></div>
           </div>
+          <div class="field" id="main-content-field">
+            <label for="qr-content" id="qr-content-label">URL</label>
+            <textarea id="qr-content" rows="2" placeholder="https://example.com" spellcheck="false">https://example.com</textarea>
+          </div>
+          <div class="type-fields hidden" id="type-fields"></div>
+          <p class="hint mono hidden" id="payload-preview"></p>
+          <p class="hint" id="content-hint" hidden></p>
           <div class="field">
             <label for="qr-name">File name <span class="hint-inline">(optional, used for downloads)</span></label>
             <input type="text" id="qr-name" placeholder="my-qr-code" />
@@ -154,6 +160,21 @@
                 <button type="button" class="seg-btn" role="radio" aria-checked="false" data-value="square">Square</button>
                 <button type="button" class="seg-btn active" role="radio" aria-checked="true" data-value="dot">Dot</button>
               </div>
+            </div>
+          </div>
+
+          <h3 class="subheading">Frame</h3>
+          <div class="field-row">
+            <div class="field">
+              <span class="label">Style</span>
+              <div class="segmented" id="frame-style" role="radiogroup" aria-label="Frame style">
+                <button type="button" class="seg-btn active" role="radio" aria-checked="true" data-frame="none">None</button>
+                <button type="button" class="seg-btn" role="radio" aria-checked="false" data-frame="label">Label</button>
+              </div>
+            </div>
+            <div class="field hidden" id="frame-label-field">
+              <label for="frame-label">Label text</label>
+              <input type="text" id="frame-label" value="SCAN ME" maxlength="24" spellcheck="false" />
             </div>
           </div>
 
@@ -287,7 +308,10 @@
           </span>
         </div>
 
-        <div class="preview-frame checkers" id="qr-preview" aria-label="QR code preview"></div>
+        <div class="preview-wrap">
+          <div class="preview-frame checkers" id="qr-preview" aria-label="QR code preview"></div>
+          <div class="frame-band hidden" id="frame-band" aria-hidden="true"></div>
+        </div>
 
         <div class="export-group" role="group" aria-label="Export">
           <span class="label">Export</span>
