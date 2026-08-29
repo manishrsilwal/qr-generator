@@ -81,10 +81,47 @@ const stillGradient = await page.evaluate(() =>
   document.querySelector("#qr-preview").innerHTML.toLowerCase().includes("gradient"));
 check(!stillGradient, "gradient fully removed after untoggle");
 
+// --- Audit regressions ---
+// quiet zone: ISO/IEC 18004 requires >= 4 modules on every side
+const qz = await page.evaluate(() => {
+  const data = "https://setu.ndrrma.gov.np/";
+  const n = window.Tessel.moduleCount(data, "H");
+  const margin = window.Tessel.quietZoneMargin(1024, data, "H");
+  const modulePx = (1024 - 2 * margin) / n;
+  return { n, margin, modulePx, ok: margin >= 4 * modulePx - 1 };
+});
+check(qz.ok, `quiet zone >= 4 modules (v${(qz.n - 17) / 4}: margin ${qz.margin}px, module ${qz.modulePx.toFixed(1)}px)`);
+
+// inverted colours decode but must carry the light-on-dark caution
+await page.click("#btn-invert");
+const cautionSeen = await page
+  .waitForFunction(() => document.querySelector("#scan-advice")?.textContent.includes("light-on-dark"), null, { timeout: 30000 })
+  .then(() => true).catch(() => false);
+check(cautionSeen, "inverted code shows light-on-dark guideline caution");
+await page.click("#btn-invert");
+await page.waitForTimeout(600);
+
+// empty content must disable downloads
+await page.fill("#qr-content", "");
+check(await page.locator("#btn-download-png").isDisabled(), "downloads disabled with empty content");
+await page.fill("#qr-content", "https://setu.ndrrma.gov.np/");
+await page.waitForTimeout(600);
+
 await page.screenshot({ path: path.join(shotDir, "ui-single.png"), fullPage: true });
 
 // --- Batch flow ---
 await page.click("#tab-batch");
+
+// XSS regression: a hostile CSV *filename* must render as text, never HTML
+const evilPath = path.join(shotDir, "<img src=x onerror=window.__xss=1>.csv");
+fs.copyFileSync("SampleFiles/batch_links.csv", evilPath);
+await page.setInputFiles("#csv-input", evilPath);
+await page.waitForSelector("#batch-preview:not(.hidden)");
+const xssFired = await page.evaluate(() => window.__xss === 1);
+const summaryText = await page.locator("#batch-summary").textContent();
+check(!xssFired && summaryText.includes("<img"), "CSV filename rendered as text, not HTML");
+fs.unlinkSync(evilPath);
+
 await page.setInputFiles("#csv-input", "SampleFiles/batch_links.csv");
 await page.waitForSelector("#batch-preview:not(.hidden)");
 check(await page.locator("#batch-table tbody tr").count() === 5, "5 CSV rows parsed");

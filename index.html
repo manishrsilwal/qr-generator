@@ -53,6 +53,7 @@
           <div class="field">
             <label for="qr-content">URL or text</label>
             <textarea id="qr-content" rows="2" placeholder="https://example.com" spellcheck="false">https://example.com</textarea>
+            <p class="hint" id="content-hint" hidden></p>
           </div>
           <div class="field">
             <label for="qr-name">File name <span class="hint-inline">(optional, used for downloads)</span></label>
@@ -101,10 +102,10 @@
             </div>
             <div class="field">
               <span class="label">Download format</span>
-              <div class="segmented" id="batch-format">
-                <button type="button" class="seg-btn" data-format="png">PNG</button>
-                <button type="button" class="seg-btn" data-format="svg">SVG</button>
-                <button type="button" class="seg-btn active" data-format="both">PNG + SVG</button>
+              <div class="segmented" id="batch-format" role="radiogroup" aria-label="Batch download format">
+                <button type="button" class="seg-btn" role="radio" aria-checked="false" data-format="png">PNG</button>
+                <button type="button" class="seg-btn" role="radio" aria-checked="false" data-format="svg">SVG</button>
+                <button type="button" class="seg-btn active" role="radio" aria-checked="true" data-format="both">PNG + SVG</button>
               </div>
             </div>
             <button class="btn btn-primary btn-lg" id="btn-batch-generate" type="button">
@@ -199,17 +200,17 @@
         <div class="card-body">
           <div class="field">
             <span class="label">Frame style</span>
-            <div class="segmented" id="corner-square-style">
-              <button type="button" class="seg-btn" data-value="square" aria-label="Square frame">Square</button>
-              <button type="button" class="seg-btn active" data-value="extra-rounded" aria-label="Rounded frame">Rounded</button>
-              <button type="button" class="seg-btn" data-value="dot" aria-label="Circle frame">Circle</button>
+            <div class="segmented" id="corner-square-style" role="radiogroup" aria-label="Corner frame style">
+              <button type="button" class="seg-btn" role="radio" aria-checked="false" data-value="square">Square</button>
+              <button type="button" class="seg-btn active" role="radio" aria-checked="true" data-value="extra-rounded">Rounded</button>
+              <button type="button" class="seg-btn" role="radio" aria-checked="false" data-value="dot">Circle</button>
             </div>
           </div>
           <div class="field">
             <span class="label">Center style</span>
-            <div class="segmented" id="corner-dot-style">
-              <button type="button" class="seg-btn" data-value="square">Square</button>
-              <button type="button" class="seg-btn active" data-value="dot">Dot</button>
+            <div class="segmented" id="corner-dot-style" role="radiogroup" aria-label="Corner center style">
+              <button type="button" class="seg-btn" role="radio" aria-checked="false" data-value="square">Square</button>
+              <button type="button" class="seg-btn active" role="radio" aria-checked="true" data-value="dot">Dot</button>
             </div>
           </div>
         </div>
@@ -227,11 +228,11 @@
           </div>
         </div>
         <div class="card-body">
-          <div class="ecc-grid" id="ecc-grid">
-            <button type="button" class="ecc-card" data-ecc="L"><span class="ecc-name">Level L</span><span class="ecc-pct">7%</span></button>
-            <button type="button" class="ecc-card" data-ecc="M"><span class="ecc-name">Level M</span><span class="ecc-pct">15%</span></button>
-            <button type="button" class="ecc-card" data-ecc="Q"><span class="ecc-name">Level Q</span><span class="ecc-pct">25%</span></button>
-            <button type="button" class="ecc-card active" data-ecc="H"><span class="ecc-name">Level H</span><span class="ecc-pct">30%</span></button>
+          <div class="ecc-grid" id="ecc-grid" role="radiogroup" aria-label="Error correction level">
+            <button type="button" class="ecc-card" role="radio" aria-checked="false" data-ecc="L"><span class="ecc-name">Level L</span><span class="ecc-pct">7%</span></button>
+            <button type="button" class="ecc-card" role="radio" aria-checked="false" data-ecc="M"><span class="ecc-name">Level M</span><span class="ecc-pct">15%</span></button>
+            <button type="button" class="ecc-card" role="radio" aria-checked="false" data-ecc="Q"><span class="ecc-name">Level Q</span><span class="ecc-pct">25%</span></button>
+            <button type="button" class="ecc-card active" role="radio" aria-checked="true" data-ecc="H"><span class="ecc-name">Level H</span><span class="ecc-pct">30%</span></button>
           </div>
         </div>
       </section>
@@ -264,7 +265,9 @@
           <div class="field-row hidden" id="logo-options">
             <div class="field">
               <label for="logo-size">Logo size <span class="hint-inline" id="logo-size-val">30%</span></label>
-              <input type="range" id="logo-size" min="15" max="45" value="30" />
+              <!-- capped at 40%: beyond that the logo out-obscures what
+                   ECC H (30% recovery) can compensate for -->
+              <input type="range" id="logo-size" min="15" max="40" value="30" />
             </div>
             <label class="switch">
               <input type="checkbox" id="logo-hide-dots" checked />
@@ -324,9 +327,12 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="https://cdn.jsdelivr.net/npm/qr-code-styling@1.9.2/lib/qr-code-styling.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.5.3/papaparse.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <!-- Pinned + SRI-hashed; the zxing-wasm decoder is loaded via dynamic
+       import in app.js, which cannot carry an integrity attribute. -->
+  <script src="https://cdn.jsdelivr.net/npm/qr-code-styling@1.9.2/lib/qr-code-styling.js" integrity="sha384-P7sw4KeI1SDhOs6wYFsBysIIHFqMTgG4y9vunEfL8ZuV0WhnHsh9MRu9Rso17MtY" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.5.3/papaparse.min.js" integrity="sha384-Jd2/X5FXVKahwaY2nivvw4LfSTg9idSj8yNXWtT4qef0fHSYr6M7M8bJAfbFYoMc" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
+  <script src="js/shared.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

@@ -9,6 +9,9 @@ import path from "node:path";
 import { JSDOM } from "jsdom";
 import { Resvg } from "@resvg/resvg-js";
 import { QRCodeStyling } from "qr-code-styling/lib/qr-code-styling.common.js";
+import Tessel from "../js/shared.js";
+
+const { normalizeUrl, safeFilename, quietZoneMargin } = Tessel;
 
 const inputCsv = process.argv[2] ?? "SampleFiles/batch_links.csv";
 const outDir = process.argv[3] ?? "output";
@@ -35,15 +38,6 @@ function parseCsv(text) {
   return rows.filter(r => r.some(cell => cell.trim() !== ""));
 }
 
-function normalizeUrl(url) {
-  const trimmed = url.trim();
-  return /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed) ? trimmed : `https://${trimmed}`;
-}
-
-function safeFilename(name) {
-  return name.trim().replace(/[\\/:*?"<>|]/g, "").replace(/\s+/g, " ").slice(0, 120);
-}
-
 async function generate(row) {
   const url = normalizeUrl(row.url);
   const qr = new QRCodeStyling({
@@ -51,7 +45,8 @@ async function generate(row) {
     type: "svg",
     width: PNG_SIZE,
     height: PNG_SIZE,
-    margin: 40,
+    // ISO/IEC 18004: quiet zone of at least 4 modules on every side
+    margin: quietZoneMargin(PNG_SIZE, url, "H"),
     data: url,
     qrOptions: { errorCorrectionLevel: "H" },
     dotsOptions: { type: "dots", color: "#000000" },

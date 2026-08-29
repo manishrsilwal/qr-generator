@@ -2,6 +2,8 @@
 (() => {
   "use strict";
 
+  const { normalizeUrl, safeFilename, quietZoneMargin, moduleCount } = window.Tessel;
+
   // ---------- State ----------
   const state = {
     content: "https://example.com",
@@ -41,7 +43,8 @@
       height: size,
       type: "svg",
       data: data || " ",
-      margin: Math.round(size * 0.04),
+      // ISO/IEC 18004: quiet zone of at least 4 modules on every side
+      margin: quietZoneMargin(size, data || " ", state.ecc),
       qrOptions: { errorCorrectionLevel: state.ecc },
       dotsOptions: { type: state.dotsType },
       backgroundOptions: {
@@ -116,6 +119,29 @@
     $("scan-advice").textContent = advice;
   }
 
+  // Guideline cautions that apply even when the code decodes: ZXing reads
+  // inverted codes (tryInvert), but many scanner apps only handle
+  // dark-on-light, and transparency depends on the surface behind the code.
+  function relativeLuminance(hex) {
+    const [r, g, b] = [1, 3, 5]
+      .map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+      .map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  }
+
+  function guidelineCaution() {
+    const dotsLum = state.dotsGradient
+      ? (relativeLuminance(state.dotsColor) + relativeLuminance(state.dotsColor2)) / 2
+      : relativeLuminance(state.dotsColor);
+    if (state.bgTransparent) {
+      return " Note: with a transparent background, place the code on a light surface.";
+    }
+    if (dotsLum > relativeLuminance(state.bgColor)) {
+      return " Caution: light-on-dark codes fail in some scanner apps — the guideline is dark modules on a light background.";
+    }
+    return "";
+  }
+
   async function loadZxing() {
     if (zxingReader || zxingFailed) return zxingReader;
     try {
@@ -156,7 +182,7 @@
       clearTimeout(checkingTimer);
       const decoded = results.length && results[0].isValid ? results[0].text : null;
       if (decoded === (state.content || " ")) {
-        setBadge("ok", "Verified scannable", `Decoded correctly at ${state.size}px export size.`);
+        setBadge("ok", "Verified scannable", `Decoded correctly at ${state.size}px export size.${guidelineCaution()}`);
       } else {
         setBadge("bad", "Hard to scan", "Increase contrast, reduce the logo size, or raise the correction level.");
       }
@@ -208,8 +234,25 @@
   });
 
   // ---------- Content inputs ----------
+  function syncContentState() {
+    const empty = !state.content;
+    $("btn-download-png").disabled = empty;
+    $("btn-download-svg").disabled = empty;
+    // Dense-code guideline: long content means small modules that scan
+    // poorly in print — surface it before the user finds out at the printer.
+    const hint = $("content-hint");
+    if (!empty && state.content.length > 200) {
+      const n = moduleCount(state.content, state.ecc);
+      hint.textContent = `Long content produces a dense ${n}×${n} code that is harder to scan in print — consider a shorter URL.`;
+      hint.hidden = false;
+    } else {
+      hint.hidden = true;
+    }
+  }
+
   $("qr-content").addEventListener("input", (e) => {
     state.content = e.target.value.trim();
+    syncContentState();
     refreshPreview();
   });
 
@@ -283,11 +326,20 @@
   bindSegmented("batch-format", "format", (v) => { state.batchFormat = v; });
 
   // ---------- ECC ----------
+  function setEcc(level) {
+    state.ecc = level;
+    document.querySelectorAll(".ecc-card").forEach((c) => {
+      const active = c.dataset.ecc === level;
+      c.classList.toggle("active", active);
+      c.setAttribute("aria-checked", String(active));
+    });
+    syncContentState();
+  }
+
   $("ecc-grid").addEventListener("click", (e) => {
     const card = e.target.closest(".ecc-card");
     if (!card) return;
-    document.querySelectorAll(".ecc-card").forEach((c) => c.classList.toggle("active", c === card));
-    state.ecc = card.dataset.ecc;
+    setEcc(card.dataset.ecc);
     refreshPreview();
   });
 
@@ -307,11 +359,7 @@
       $("logo-chip").classList.remove("hidden");
       $("logo-options").classList.remove("hidden");
       // A logo hides modules; H gives the most headroom to stay scannable
-      if (state.ecc !== "H") {
-        state.ecc = "H";
-        document.querySelectorAll(".ecc-card").forEach((c) =>
-          c.classList.toggle("active", c.dataset.ecc === "H"));
-      }
+      if (state.ecc !== "H") setEcc("H");
       refreshPreview();
     };
     reader.readAsDataURL(file);
@@ -337,8 +385,12 @@
   });
 
   // ---------- Downloads (single) ----------
-  function safeFilename(name) {
-    return (name || "").trim().replace(/[\\/:*?"<>|]/g, "").replace(/\s+/g, " ").slice(0, 120);
+  function triggerDownload(blob, name) {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    a.click();
+    URL.revokeObjectURL(a.href);
   }
 
   function singleFileName() {
@@ -386,12 +438,7 @@
   // ---------- Batch: CSV template ----------
   $("btn-template").addEventListener("click", () => {
     const csv = "qrName,hostname,scanLimit,url\nMy First QR,,,https://example.com\nMy Second QR,,,https://example.org\n";
-    const blob = new Blob([csv], { type: "text/csv" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = "qr-batch-template.csv";
-    a.click();
-    URL.revokeObjectURL(a.href);
+    triggerDownload(new Blob([csv], { type: "text/csv" }), "qr-batch-template.csv");
   });
 
   // ---------- Batch: CSV upload ----------
@@ -413,12 +460,6 @@
   csvInput.addEventListener("change", (e) => {
     if (e.target.files[0]) parseCsvFile(e.target.files[0]);
   });
-
-  function normalizeUrl(url) {
-    const trimmed = (url || "").trim();
-    if (!trimmed) return "";
-    return /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed) ? trimmed : `https://${trimmed}`;
-  }
 
   function parseCsvFile(file) {
     Papa.parse(file, {
@@ -458,8 +499,13 @@
   function renderBatchPreview() {
     const rows = state.batchRows;
     const validCount = rows.filter((r) => r.valid).length;
-    $("batch-summary").innerHTML =
-      `<strong>${batchFileName}</strong> — ${validCount} of ${rows.length} row${rows.length === 1 ? "" : "s"} ready to generate.`;
+    // Build with DOM APIs: the file name is user-controlled and must never
+    // reach innerHTML (a file named "<img onerror=…>.csv" is valid on disk).
+    const summary = $("batch-summary");
+    summary.textContent = "";
+    const nameEl = document.createElement("strong");
+    nameEl.textContent = batchFileName;
+    summary.append(nameEl, ` — ${validCount} of ${rows.length} row${rows.length === 1 ? "" : "s"} ready to generate.`);
 
     // sorted view for the table only; generation keeps CSV order
     const view = [...rows].sort((a, b) => {
@@ -554,11 +600,7 @@
       bar.style.width = "100%";
       label.textContent = "Packaging ZIP…";
       const blob = await zip.generateAsync({ type: "blob" });
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = "qr-codes.zip";
-      a.click();
-      URL.revokeObjectURL(a.href);
+      triggerDownload(blob, "qr-codes.zip");
       label.textContent = `Done — ${rows.length} QR code${rows.length === 1 ? "" : "s"} downloaded.`;
       showToast(`qr-codes.zip — ${rows.length} code${rows.length === 1 ? "" : "s"} downloaded`);
     } catch (err) {
@@ -569,5 +611,6 @@
   });
 
   // ---------- Init ----------
+  syncContentState();
   refreshPreview();
 })();
