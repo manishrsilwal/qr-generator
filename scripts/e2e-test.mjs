@@ -101,10 +101,15 @@ check(cautionSeen, "inverted code shows light-on-dark guideline caution");
 await page.click("#btn-invert");
 await page.waitForTimeout(600);
 
-// empty content must disable downloads and copy
+// empty content must disable downloads and copy, and the badge must agree
 await page.fill("#qr-content", "");
 check(await page.locator("#btn-download-png").isDisabled(), "downloads disabled with empty content");
 check(await page.locator("#btn-copy-png").isDisabled(), "copy disabled with empty content");
+await page.waitForTimeout(700);
+check(
+  (await page.locator("#scan-title").textContent()).includes("Waiting for content"),
+  "badge shows waiting state with empty content"
+);
 await page.fill("#qr-content", "https://setu.ndrrma.gov.np/");
 await page.waitForTimeout(600);
 

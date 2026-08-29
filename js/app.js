@@ -215,6 +215,13 @@
 
   async function runScanCheck() {
     const runId = ++scanRunId;
+    // No content yet: the badge must agree with the disabled downloads
+    // instead of "verifying" a placeholder character.
+    if (!state.content) {
+      scanBadge.classList.remove("stale");
+      setBadge("off", "Waiting for content", "Fill in the details above to generate a verifiable code.");
+      return;
+    }
     const reader = await loadZxing();
     if (!reader) return;
 
@@ -238,7 +245,7 @@
       if (runId !== scanRunId) return; // stale check, newer one is running
       clearTimeout(checkingTimer);
       const decoded = results.length && results[0].isValid ? results[0].text : null;
-      if (decoded === (state.content || " ")) {
+      if (decoded === state.content) {
         setBadge("ok", "Verified scannable", `Decoded correctly at ${state.size}px export size.${guidelineCaution()}`);
       } else {
         setBadge("bad", "Hard to scan", "Increase contrast, reduce the logo size, or raise the correction level.");
