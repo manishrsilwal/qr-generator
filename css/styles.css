@@ -92,11 +92,14 @@ button { cursor: pointer; }
 
 .brand { display: flex; align-items: center; gap: 0.55rem; }
 .brand-icon { width: 26px; height: 26px; color: var(--brand-ink); }
+.brand-text { display: flex; flex-direction: column; line-height: 1.2; }
 .brand-name {
   font-weight: 700;
   font-size: 1.05rem;
   letter-spacing: -0.01em;
 }
+.brand-tagline { font-size: 0.7rem; color: var(--text-muted); }
+@media (max-width: 560px) { .brand-tagline { display: none; } }
 
 .topbar-actions { display: flex; align-items: center; gap: 0.75rem; }
 
@@ -153,7 +156,11 @@ button { cursor: pointer; }
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
+  transition: opacity var(--t);
 }
+
+/* design cards wait for content (inert blocks focus and clicks) */
+.card-disabled { opacity: 0.45; cursor: not-allowed; }
 
 .card-head {
   display: flex;

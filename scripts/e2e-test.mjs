@@ -41,11 +41,19 @@ await page.goto(base, { waitUntil: "networkidle" });
 check(await page.locator("#qr-preview .preview-empty").count() === 1, "empty state shown before content");
 check(await page.locator("#scan-badge").isHidden(), "badge hidden in empty state");
 check(await page.locator("#dot-style-grid .style-option").count() === 6, "6 dot styles rendered");
+check(
+  await page.evaluate(() => document.getElementById("card-style").inert && document.getElementById("card-reliability").inert),
+  "design cards inert before content"
+);
 
 await page.fill("#qr-content", "https://setu.ndrrma.gov.np/");
 await page.fill("#qr-name", "setu-test");
 await page.waitForTimeout(800);
 check(await page.locator("#qr-preview svg, #qr-preview canvas").count() > 0, "preview renders once content exists");
+check(
+  await page.evaluate(() => !document.getElementById("card-style").inert),
+  "design cards enabled once content exists"
+);
 
 // first scan check downloads the zxing wasm, so allow generous time
 const scanBadgeText = await page
@@ -143,6 +151,10 @@ await page.fill("#tf-wifi-ssid", "Relief-Center");
 await page.fill("#tf-wifi-pass", "nepal2026");
 const wifiPayload = await page.locator("#payload-preview").textContent();
 check(wifiPayload.startsWith("WIFI:T:WPA;S:Relief-Center;"), `Wi-Fi payload built (${wifiPayload.trim()})`);
+check(
+  (await page.getAttribute("#tf-wifi-pass", "placeholder")) === "Network password",
+  "generated fields carry placeholders"
+);
 await page.waitForTimeout(700);
 check(await waitBadgeOk(), "Wi-Fi QR verified scannable");
 await page.click('#content-type .chip[data-type="url"]');

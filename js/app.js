@@ -321,11 +321,23 @@
   });
 
   // ---------- Content inputs ----------
+  // Design cards are inert until there is something to design — except on
+  // the Batch tab, where the design still applies to the CSV rows.
+  function syncDesignCards() {
+    const disable = !state.content && $("panel-batch").classList.contains("hidden");
+    for (const id of ["card-style", "card-reliability"]) {
+      const card = $(id);
+      card.inert = disable;
+      card.classList.toggle("card-disabled", disable);
+    }
+  }
+
   function syncContentState() {
     const empty = !state.content;
     $("btn-download-png").disabled = empty;
     $("btn-download-svg").disabled = empty;
     $("btn-copy-png").disabled = empty;
+    syncDesignCards();
     // Dense-code guideline: long content means small modules that scan
     // poorly in print — surface it before the user finds out at the printer.
     const hint = $("content-hint");
@@ -349,8 +361,8 @@
       label: "Wi-Fi",
       hint: "Scanning connects the phone to this network directly.",
       fields: [
-        { id: "ssid", label: "Network name (SSID)" },
-        { id: "pass", label: "Password" },
+        { id: "ssid", label: "Network name (SSID)", ph: "Cafe-Guest-WiFi" },
+        { id: "pass", label: "Password", ph: "Network password" },
         { id: "sec", label: "Security", type: "select", options: ["WPA", "WEP", "None"] },
       ],
       build: (v) => {
@@ -364,12 +376,12 @@
       label: "vCard",
       hint: "vCards produce dense codes — keep fields minimal if the code will be printed small.",
       fields: [
-        { id: "first", label: "First name" },
-        { id: "last", label: "Last name" },
-        { id: "phone", label: "Phone" },
-        { id: "email", label: "Email" },
-        { id: "org", label: "Organization" },
-        { id: "site", label: "Website" },
+        { id: "first", label: "First name", ph: "Asha" },
+        { id: "last", label: "Last name", ph: "Sharma" },
+        { id: "phone", label: "Phone", ph: "+977 9800000000" },
+        { id: "email", label: "Email", ph: "asha@example.com" },
+        { id: "org", label: "Organization", ph: "Company or team" },
+        { id: "site", label: "Website", ph: "https://example.com" },
       ],
       build: (v) => {
         if (!v.first && !v.last && !v.phone && !v.email) return "";
@@ -385,9 +397,9 @@
     email: {
       label: "Email",
       fields: [
-        { id: "to", label: "To" },
-        { id: "subject", label: "Subject" },
-        { id: "body", label: "Message" },
+        { id: "to", label: "To", ph: "someone@example.com" },
+        { id: "subject", label: "Subject", ph: "Subject line" },
+        { id: "body", label: "Message", ph: "Message text" },
       ],
       build: (v) => {
         if (!v.to) return "";
@@ -399,22 +411,22 @@
     },
     phone: {
       label: "Phone",
-      fields: [{ id: "num", label: "Phone number" }],
+      fields: [{ id: "num", label: "Phone number", ph: "+977 9800000000" }],
       build: (v) => (v.num ? `tel:${v.num.replace(/[^\d+]/g, "")}` : ""),
     },
     sms: {
       label: "SMS",
       fields: [
         { id: "num", label: "Phone number" },
-        { id: "msg", label: "Message" },
+        { id: "msg", label: "Message", ph: "Message text" },
       ],
       build: (v) => (v.num ? `SMSTO:${v.num.replace(/[^\d+]/g, "")}:${v.msg || ""}` : ""),
     },
     whatsapp: {
       label: "WhatsApp",
       fields: [
-        { id: "num", label: "Phone number (with country code)" },
-        { id: "msg", label: "Pre-filled message" },
+        { id: "num", label: "Phone number (with country code)", ph: "9779800000000" },
+        { id: "msg", label: "Pre-filled message", ph: "Hello!" },
       ],
       build: (v) => {
         const num = (v.num || "").replace(/\D/g, "");
@@ -425,8 +437,8 @@
     geo: {
       label: "Location",
       fields: [
-        { id: "lat", label: "Latitude" },
-        { id: "lng", label: "Longitude" },
+        { id: "lat", label: "Latitude", ph: "27.7172" },
+        { id: "lng", label: "Longitude", ph: "85.3240" },
       ],
       build: (v) => {
         const lat = parseFloat(v.lat), lng = parseFloat(v.lng);
@@ -481,6 +493,7 @@
         input = document.createElement("input");
         input.type = "text";
         input.spellcheck = false;
+        input.placeholder = f.ph || "";
         input.value = values[f.id] ?? "";
       }
       input.id = `tf-${type}-${f.id}`;
@@ -814,6 +827,7 @@
     tabBatch.setAttribute("aria-selected", String(!single));
     $("panel-single").classList.toggle("hidden", !single);
     $("panel-batch").classList.toggle("hidden", single);
+    syncDesignCards();
   }
 
   tabSingle.addEventListener("click", () => setTab("single"));
