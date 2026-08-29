@@ -1,0 +1,64 @@
+# Deploys the Tessel app into manishrsilwal.github.io/qr-generator/
+#
+# Auth: an SSH deploy key. Setup (one time):
+#   1. Add the PUBLIC key as a deploy key with write access on
+#      manishrsilwal/manishrsilwal.github.io (Settings → Deploy keys).
+#   2. Add the PRIVATE key as an Actions secret named SITE_DEPLOY_KEY
+#      on manishrsilwal/qr-generator (Settings → Secrets → Actions).
+#
+# Only index.html, css/ and js/ are published — the CLI, tests, and
+# sample files stay out of the website.
+
+name: Deploy to website
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "index.html"
+      - "css/**"
+      - "js/**"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-site
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout app
+        uses: actions/checkout@v4
+
+      - name: Checkout website
+        uses: actions/checkout@v4
+        with:
+          repository: manishrsilwal/manishrsilwal.github.io
+          ssh-key: ${{ secrets.SITE_DEPLOY_KEY }}
+          path: site
+
+      - name: Stage app files
+        run: |
+          mkdir -p dist
+          cp index.html dist/
+          cp -R css js dist/
+
+      - name: Sync into site/qr-generator/
+        run: |
+          mkdir -p site/qr-generator
+          rsync -a --delete dist/ site/qr-generator/
+
+      - name: Commit and push
+        working-directory: site
+        run: |
+          git config user.name "tessel-deploy[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add qr-generator
+          if git diff --cached --quiet; then
+            echo "No changes to deploy."
+          else
+            git commit -m "Deploy Tessel from qr-generator@${GITHUB_SHA::7}"
+            git push
+          fi
