@@ -1,6 +1,8 @@
 /* ==========================================================================
    QR Studio — redesigned UI (v2)
-   Vanilla token-based CSS. IBM Plex Sans (UI) + JetBrains Mono (headings/data).
+   Vanilla token-based CSS. Google Sans for all text; hierarchy comes from
+   weight (400 body / 500 controls / 600 headings / 700 brand & verdict),
+   case, and tabular figures for data.
    Light + dark themes: :root = light, media-query dark for "system",
    [data-theme] overrides for the explicit toggle.
    ========================================================================== */
@@ -99,7 +101,7 @@
 html { font-size: 16px; }
 
 body {
-  font-family: "IBM Plex Sans", -apple-system, "Segoe UI", sans-serif;
+  font-family: "Google Sans", -apple-system, "Segoe UI", sans-serif;
   background: var(--bg);
   color: var(--text);
   line-height: 1.5;
@@ -109,8 +111,10 @@ body {
 svg { display: block; }
 .hidden { display: none !important; }
 
+/* data text: same family, aligned figures */
 .mono, code {
-  font-family: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
 }
 
 /* every interactive element */
@@ -144,10 +148,9 @@ button { cursor: pointer; }
 .brand { display: flex; align-items: center; gap: 0.55rem; }
 .brand-icon { width: 26px; height: 26px; color: var(--brand-ink); }
 .brand-name {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
   font-weight: 700;
-  font-size: 1rem;
-  letter-spacing: -0.02em;
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
 }
 
 .topbar-actions { display: flex; align-items: center; gap: 0.75rem; }
@@ -249,8 +252,7 @@ button { cursor: pointer; }
 .card-head-icon svg { width: 19px; height: 19px; }
 
 .card-head h2 {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-weight: 600;
   letter-spacing: -0.01em;
 }
@@ -444,8 +446,10 @@ input[type="range"] { accent-color: var(--brand); cursor: pointer; }
   border: none;
   padding: 0.25rem;
   width: 84px;
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: 0.8rem;
+  font-size: 0.82rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
   text-transform: lowercase;
   background: transparent;
 }
@@ -516,7 +520,7 @@ input[type="range"] { accent-color: var(--brand); cursor: pointer; }
 .seg-btn:hover { color: var(--text); }
 .seg-btn.active { background: var(--brand); color: var(--on-brand); }
 
-.seg-mono .seg-btn { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.78rem; }
+.seg-mono .seg-btn { font-size: 0.8rem; font-variant-numeric: tabular-nums; }
 
 /* ---------- ECC grid ---------- */
 .ecc-grid {
@@ -543,7 +547,7 @@ input[type="range"] { accent-color: var(--brand); cursor: pointer; }
 
 .ecc-name { font-weight: 600; font-size: 0.85rem; }
 .ecc-pct {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
   font-size: 0.72rem;
   font-weight: 600;
   color: var(--brand-text);
@@ -721,9 +725,9 @@ th[aria-sort="descending"] .sort-arrow { transform: rotate(180deg); }
   align-items: center;
   justify-content: center;
   height: 100%;
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: 0.72rem;
-  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.74rem;
+  font-weight: 500;
   color: var(--text);
 }
 
@@ -731,9 +735,9 @@ th[aria-sort="descending"] .sort-arrow { transform: rotate(180deg); }
 .preview-card { padding: 1.25rem; display: flex; flex-direction: column; gap: 1rem; }
 
 .preview-title {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 /* --- Scannability badge: the hero --- */
