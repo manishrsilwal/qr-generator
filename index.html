@@ -349,6 +349,11 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+  <button class="mini-preview hidden" id="mini-preview" type="button" aria-label="Scroll back to the preview">
+    <span id="mini-preview-qr" aria-hidden="true"></span>
+    <span class="mini-dot" id="mini-dot" aria-hidden="true"></span>
+  </button>
+
   <!-- Pinned + SRI-hashed; the zxing-wasm decoder is loaded via dynamic
        import in app.js, which cannot carry an integrity attribute. -->
   <script src="https://cdn.jsdelivr.net/npm/qr-code-styling@1.9.2/lib/qr-code-styling.js" integrity="sha384-P7sw4KeI1SDhOs6wYFsBysIIHFqMTgG4y9vunEfL8ZuV0WhnHsh9MRu9Rso17MtY" crossorigin="anonymous"></script>

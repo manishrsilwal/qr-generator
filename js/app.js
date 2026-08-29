@@ -97,6 +97,9 @@
     // options, so removed keys (e.g. a disabled gradient) would linger.
     previewEl.textContent = "";
     new QRCodeStyling(buildOptions({ size: 300 })).append(previewEl);
+    const mini = $("mini-preview-qr");
+    mini.textContent = "";
+    new QRCodeStyling(buildOptions({ size: 64 })).append(mini);
     clearTimeout(scanCheckTimer);
     scanCheckTimer = setTimeout(runScanCheck, 500);
     syncFrameBand();
@@ -128,6 +131,7 @@
     $("scan-icon").innerHTML = BADGE_ICONS[stateName];
     $("scan-title").textContent = title;
     $("scan-advice").textContent = advice;
+    $("mini-dot").className = `mini-dot ${stateName}`;
   }
 
   // ---------- Artifact rendering (QR + optional frame) ----------
@@ -154,9 +158,12 @@
   // with it on, the QR is composed inside a labelled frame (the band sits
   // outside the ISO quiet zone, so scannability is unaffected).
   async function renderArtifact(kind, dataOverride) {
-    const qr = new QRCodeStyling(buildOptions(dataOverride ? { data: dataOverride } : {}));
-    if (!state.frame) return qr.getRawData(kind);
+    const opts = buildOptions(dataOverride ? { data: dataOverride } : {});
+    if (!state.frame) return new QRCodeStyling(opts).getRawData(kind);
 
+    // The outer card paints the background (with rounded corners); the QR
+    // layer stays transparent so its square corners don't punch through.
+    const qr = new QRCodeStyling({ ...opts, backgroundOptions: { color: "rgba(255,255,255,0)" } });
     const size = state.size;
     const band = Math.round(size * 0.16);
     const radius = Math.round(size * 0.05);
@@ -324,6 +331,7 @@
     text: { label: "Text", inputLabel: "Text", placeholder: "Any plain text" },
     wifi: {
       label: "Wi-Fi",
+      hint: "Scanning connects the phone to this network directly.",
       fields: [
         { id: "ssid", label: "Network name (SSID)" },
         { id: "pass", label: "Password" },
@@ -338,6 +346,7 @@
     },
     vcard: {
       label: "vCard",
+      hint: "vCards produce dense codes — keep fields minimal if the code will be printed small.",
       fields: [
         { id: "first", label: "First name" },
         { id: "last", label: "Last name" },
@@ -445,6 +454,12 @@
       });
       field.append(label, input);
       wrap.appendChild(field);
+    }
+    if (CONTENT_TYPES[type].hint) {
+      const hint = document.createElement("p");
+      hint.className = "hint type-hint";
+      hint.textContent = CONTENT_TYPES[type].hint;
+      wrap.appendChild(hint);
     }
   }
 
@@ -864,7 +879,9 @@
     // sorted view for the table only; generation keeps CSV order
     const view = [...rows].sort((a, b) => {
       const { key, dir } = batchSort;
-      const av = a[key], bv = b[key];
+      // the Status column sorts by what the badge actually says
+      const av = key === "valid" ? rowBadgeState(a).text : a[key];
+      const bv = key === "valid" ? rowBadgeState(b).text : b[key];
       if (typeof av === "string") return av.localeCompare(bv) * dir;
       return (av === bv ? 0 : av < bv ? -1 : 1) * dir;
     });
@@ -920,14 +937,12 @@
   }
 
   function previewRow(row) {
-    state.content = row.url;
-    state.fileName = row.name;
     $("qr-content").value = row.url;
     $("qr-name").value = row.name;
+    state.fileName = row.name;
     contentPristine = false;
+    setContentType("url"); // rows are URLs; chips must not claim otherwise
     setTab("single");
-    syncContentState();
-    refreshPreview(false);
     showToast(`Previewing “${row.name}”`);
   }
 
@@ -1023,6 +1038,18 @@
       btn.disabled = false;
       $("btn-batch-cancel").disabled = true;
     }
+  });
+
+  // ---------- Mobile mini-preview ----------
+  // On small screens the preview scrolls away while editing; a floating
+  // thumbnail keeps the code and its verification state in sight.
+  const miniPreview = $("mini-preview");
+  new IntersectionObserver(([entry]) => {
+    miniPreview.classList.toggle("hidden", entry.isIntersecting);
+  }, { threshold: 0.1 }).observe(previewEl);
+  miniPreview.addEventListener("click", () => {
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    previewEl.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "center" });
   });
 
   // ---------- Keyboard: WAI-ARIA radiogroup pattern ----------

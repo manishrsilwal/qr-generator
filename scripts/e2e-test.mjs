@@ -162,6 +162,8 @@ await page.waitForTimeout(400);
 await page.screenshot({ path: path.join(shotDir, "ui-single.png"), fullPage: true });
 
 // --- Batch flow ---
+// leave a non-URL type selected so the row-bridge test proves it resets
+await page.click('#content-type .chip[data-type="wifi"]');
 await page.click("#tab-batch");
 
 // XSS regression: a hostile CSV *filename* must render as text, never HTML
@@ -212,6 +214,10 @@ await page.screenshot({ path: path.join(shotDir, "ui-batch.png"), fullPage: true
 await page.click("#batch-table .link-btn >> nth=2");
 check(await page.locator("#panel-single:not(.hidden)").count() === 1, "row click opens Single tab");
 check((await page.inputValue("#qr-content")).includes("setu"), "row URL loaded into content field");
+check(
+  await page.locator('#content-type .chip[data-type="url"]').evaluate((el) => el.classList.contains("active")),
+  "row preview resets content type to URL"
+);
 await page.click("#tab-batch");
 
 // --- Mobile viewport ---
@@ -219,6 +225,16 @@ await page.setViewportSize({ width: 375, height: 800 });
 await page.waitForTimeout(300);
 const hasHScroll = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
 check(!hasHScroll, "no horizontal scroll at 375px");
+
+// mini preview appears when the main preview scrolls out of view
+await page.click("#tab-single");
+await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+await page.waitForTimeout(600);
+check(await page.locator("#mini-preview:not(.hidden)").count() === 1, "mini preview appears on mobile scroll");
+await page.evaluate(() => window.scrollTo(0, 0));
+await page.waitForTimeout(600);
+check(await page.locator("#mini-preview.hidden").count() === 1, "mini preview hides when preview is visible");
+
 await page.screenshot({ path: path.join(shotDir, "ui-mobile.png"), fullPage: true });
 
 check(errors.length === 0, errors.length ? `page errors: ${errors.join(" | ")}` : "no page errors");

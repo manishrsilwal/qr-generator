@@ -868,6 +868,44 @@ th[aria-sort="descending"] .sort-arrow { transform: rotate(180deg); }
 .toast svg { width: 15px; height: 15px; }
 .toast-error { background: var(--err); color: #fff; }
 
+/* ---------- Mobile mini-preview ---------- */
+.mini-preview {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 40;
+  width: 76px;
+  height: 76px;
+  padding: 5px;
+  background: var(--card);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 14px rgba(16, 28, 44, 0.18);
+  display: grid;
+  place-items: center;
+}
+
+.mini-preview svg, .mini-preview canvas { width: 64px !important; height: 64px !important; }
+
+.mini-dot {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--card);
+  background: var(--border-strong);
+}
+.mini-dot.ok { background: var(--ok); }
+.mini-dot.bad { background: var(--err); }
+.mini-dot.checking, .mini-dot.off { background: var(--border-strong); }
+
+/* desktop keeps the sticky preview column; the float is mobile-only */
+@media (min-width: 921px) {
+  .mini-preview { display: none; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
   .spin { animation: none; }
