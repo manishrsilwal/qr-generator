@@ -38,12 +38,14 @@ const check = (ok, label) => {
 await page.goto(base, { waitUntil: "networkidle" });
 
 // --- Single flow ---
-check(await page.locator("#qr-preview svg, #qr-preview canvas").count() > 0, "preview renders");
+check(await page.locator("#qr-preview .preview-empty").count() === 1, "empty state shown before content");
+check(await page.locator("#scan-badge").isHidden(), "badge hidden in empty state");
 check(await page.locator("#dot-style-grid .style-option").count() === 6, "6 dot styles rendered");
 
 await page.fill("#qr-content", "https://setu.ndrrma.gov.np/");
 await page.fill("#qr-name", "setu-test");
 await page.waitForTimeout(800);
+check(await page.locator("#qr-preview svg, #qr-preview canvas").count() > 0, "preview renders once content exists");
 
 // first scan check downloads the zxing wasm, so allow generous time
 const scanBadgeText = await page
@@ -107,8 +109,8 @@ check(await page.locator("#btn-download-png").isDisabled(), "downloads disabled 
 check(await page.locator("#btn-copy-png").isDisabled(), "copy disabled with empty content");
 await page.waitForTimeout(700);
 check(
-  (await page.locator("#scan-title").textContent()).includes("Waiting for content"),
-  "badge shows waiting state with empty content"
+  await page.locator("#qr-preview .preview-empty").count() === 1,
+  "empty state returns when content is cleared"
 );
 await page.fill("#qr-content", "https://setu.ndrrma.gov.np/");
 await page.waitForTimeout(600);

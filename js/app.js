@@ -6,7 +6,7 @@
 
   // ---------- State ----------
   const state = {
-    content: "https://example.com",
+    content: "",
     contentType: "url",
     fileName: "",
     frame: false,
@@ -92,17 +92,35 @@
   const previewEl = $("qr-preview");
   let scanCheckTimer = null;
 
+  const EMPTY_STATE_HTML =
+    '<div class="preview-empty">' +
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM18 18h3v3h-3z"/></svg>' +
+    "<p><strong>No QR code yet</strong></p>" +
+    "<p>Pick a type and add content — your code appears here as soon as it can be generated and verified.</p>" +
+    "</div>";
+
   function refreshPreview(designChanged = true) {
-    // Recreate the instance instead of update(): update() deep-merges
-    // options, so removed keys (e.g. a disabled gradient) would linger.
-    previewEl.textContent = "";
-    new QRCodeStyling(buildOptions({ size: 300 })).append(previewEl);
-    const mini = $("mini-preview-qr");
-    mini.textContent = "";
-    new QRCodeStyling(buildOptions({ size: 64 })).append(mini);
-    clearTimeout(scanCheckTimer);
-    scanCheckTimer = setTimeout(runScanCheck, 500);
+    if (!state.content) {
+      // Empty state: never show a placeholder QR a user could mistake for real
+      previewEl.classList.add("empty");
+      previewEl.innerHTML = EMPTY_STATE_HTML;
+      $("mini-preview-qr").textContent = "";
+      scanBadge.hidden = true;
+      clearTimeout(scanCheckTimer);
+    } else {
+      // Recreate the instance instead of update(): update() deep-merges
+      // options, so removed keys (e.g. a disabled gradient) would linger.
+      previewEl.classList.remove("empty");
+      previewEl.textContent = "";
+      new QRCodeStyling(buildOptions({ size: 300 })).append(previewEl);
+      const mini = $("mini-preview-qr");
+      mini.textContent = "";
+      new QRCodeStyling(buildOptions({ size: 64 })).append(mini);
+      clearTimeout(scanCheckTimer);
+      scanCheckTimer = setTimeout(runScanCheck, 500);
+    }
     syncFrameBand();
+    syncMiniPreview();
     // batch codes share the design, so a design change makes any per-row
     // "verified" claim stale — content-only changes (designChanged=false) don't
     if (designChanged && state.batchRows.some((r) => r.verified !== undefined)) {
@@ -222,11 +240,9 @@
 
   async function runScanCheck() {
     const runId = ++scanRunId;
-    // No content yet: the badge must agree with the disabled downloads
-    // instead of "verifying" a placeholder character.
+    // No content: the preview area's empty state carries the message
     if (!state.content) {
-      scanBadge.classList.remove("stale");
-      setBadge("off", "Waiting for content", "Fill in the details above to generate a verifiable code.");
+      scanBadge.hidden = true;
       return;
     }
     const reader = await loadZxing();
@@ -327,8 +343,8 @@
   const vEsc = (s) => (s || "").replace(/([\\;,])/g, "\\$1").replace(/\n/g, "\\n");
 
   const CONTENT_TYPES = {
-    url: { label: "URL", inputLabel: "URL", placeholder: "https://example.com" },
-    text: { label: "Text", inputLabel: "Text", placeholder: "Any plain text" },
+    url: { label: "URL" },
+    text: { label: "Text" },
     wifi: {
       label: "Wi-Fi",
       hint: "Scanning connects the phone to this network directly.",
@@ -422,6 +438,26 @@
 
   const typeValues = {}; // remembered per type for the session
 
+  // leading icons for generated fields, keyed by field id
+  const FIELD_ICONS = {
+    ssid: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M2 9a15 15 0 0 1 20 0M5.5 12.5a10 10 0 0 1 13 0M9 16a5 5 0 0 1 6 0"/><circle cx="12" cy="19" r="1.2" fill="currentColor" stroke="none"/></svg>',
+    pass: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>',
+    sec: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3 4 6v6c0 4.4 3.4 8.4 8 9 4.6-.6 8-4.6 8-9V6l-8-3z"/></svg>',
+    first: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 5-6 8-6s6.5 2 8 6"/></svg>',
+    last: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 5-6 8-6s6.5 2 8 6"/></svg>',
+    phone: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg>',
+    num: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg>',
+    email: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>',
+    to: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>',
+    org: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16M4 21h16M8 7h2m-2 4h2m-2 4h2m4-8h2m-2 4h2"/><path d="M16 21v-4h4v4"/></svg>',
+    site: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18z"/></svg>',
+    subject: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>',
+    body: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12a8 8 0 0 1-8 8H4l2-3a8 8 0 1 1 15-5z"/></svg>',
+    msg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12a8 8 0 0 1-8 8H4l2-3a8 8 0 1 1 15-5z"/></svg>',
+    lat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 21s-7-6.3-7-11a7 7 0 0 1 14 0c0 4.7-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>',
+    lng: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 21s-7-6.3-7-11a7 7 0 0 1 14 0c0 4.7-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>',
+  };
+
   function buildTypeFields(type) {
     const wrap = $("type-fields");
     wrap.textContent = "";
@@ -452,7 +488,11 @@
         values[f.id] = input.value;
         rebuildPayload();
       });
-      field.append(label, input);
+      const iwrap = document.createElement("div");
+      iwrap.className = "iwrap";
+      iwrap.innerHTML = FIELD_ICONS[f.id] || "";
+      iwrap.appendChild(input);
+      field.append(label, iwrap);
       wrap.appendChild(field);
     }
     if (CONTENT_TYPES[type].hint) {
@@ -471,7 +511,8 @@
       preview.textContent = state.content;
       preview.classList.toggle("hidden", !state.content);
     } else {
-      state.content = $("qr-content").value.trim();
+      const source = state.contentType === "text" ? $("qr-text") : $("qr-content");
+      state.content = source.value.trim();
       $("payload-preview").classList.add("hidden");
     }
     syncContentState();
@@ -486,13 +527,10 @@
       c.setAttribute("aria-checked", String(on));
     });
     const def = CONTENT_TYPES[type];
-    $("main-content-field").classList.toggle("hidden", Boolean(def.fields));
+    $("main-content-field").classList.toggle("hidden", type !== "url");
+    $("text-content-field").classList.toggle("hidden", type !== "text");
     $("type-fields").classList.toggle("hidden", !def.fields);
     if (def.fields) buildTypeFields(type);
-    else {
-      $("qr-content-label").textContent = def.inputLabel;
-      $("qr-content").placeholder = def.placeholder;
-    }
     rebuildPayload();
   }
 
@@ -508,16 +546,8 @@
     $("content-type").appendChild(chip);
   });
 
-  // Select the seeded example on first focus so typing replaces it directly
-  let contentPristine = true;
-  $("qr-content").addEventListener("focus", (e) => {
-    if (contentPristine) e.target.select();
-  });
-
-  $("qr-content").addEventListener("input", () => {
-    contentPristine = false;
-    rebuildPayload();
-  });
+  $("qr-content").addEventListener("input", rebuildPayload);
+  $("qr-text").addEventListener("input", rebuildPayload);
 
   $("qr-name").addEventListener("input", (e) => {
     state.fileName = e.target.value.trim();
@@ -595,7 +625,7 @@
   // ---------- Frame ----------
   function syncFrameBand() {
     const band = $("frame-band");
-    band.classList.toggle("hidden", !state.frame);
+    band.classList.toggle("hidden", !(state.frame && state.content));
     if (state.frame) {
       band.textContent = state.frameLabel || "SCAN ME";
       band.style.background = state.dotsColor;
@@ -621,18 +651,13 @@
   // ---------- ECC ----------
   function setEcc(level) {
     state.ecc = level;
-    document.querySelectorAll(".ecc-card").forEach((c) => {
-      const active = c.dataset.ecc === level;
-      c.classList.toggle("active", active);
-      c.setAttribute("aria-checked", String(active));
-    });
+    setSegmented("ecc-grid", "ecc", level);
     syncContentState();
   }
 
-  $("ecc-grid").addEventListener("click", (e) => {
-    const card = e.target.closest(".ecc-card");
-    if (!card) return;
-    setEcc(card.dataset.ecc);
+  bindSegmented("ecc-grid", "ecc", (v) => {
+    state.ecc = v;
+    syncContentState();
     refreshPreview();
   });
 
@@ -940,7 +965,6 @@
     $("qr-content").value = row.url;
     $("qr-name").value = row.name;
     state.fileName = row.name;
-    contentPristine = false;
     setContentType("url"); // rows are URLs; chips must not claim otherwise
     setTab("single");
     showToast(`Previewing “${row.name}”`);
@@ -1044,8 +1068,15 @@
   // On small screens the preview scrolls away while editing; a floating
   // thumbnail keeps the code and its verification state in sight.
   const miniPreview = $("mini-preview");
+  let previewInView = true;
+
+  function syncMiniPreview() {
+    miniPreview.classList.toggle("hidden", previewInView || !state.content);
+  }
+
   new IntersectionObserver(([entry]) => {
-    miniPreview.classList.toggle("hidden", entry.isIntersecting);
+    previewInView = entry.isIntersecting;
+    syncMiniPreview();
   }, { threshold: 0.1 }).observe(previewEl);
   miniPreview.addEventListener("click", () => {
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
